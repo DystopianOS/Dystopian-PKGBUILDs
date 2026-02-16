@@ -1,0 +1,172 @@
+#!/bin/sh
+
+if [ "$(id -u)" -ne 0 ]; then
+  echo "Please run as root"
+  exit 1
+fi
+
+
+KEY="/etc/dystopian/secboot/db/db.key"
+CERT="/etc/dystopian/secboot/db/db.pem"
+OSREL_FILE="/etc/os-release"
+STUB="/usr/lib/systemd/boot/efi/linuxx64.efi.stub"
+INTEL_UCODE="/boot/intel-ucode.img"
+AMD_UCODE="/boot/amd-ucode.img"
+
+TMPDIR=$(mktemp -d)
+trap 'rm -rf "$TMPDIR"' EXIT
+
+
+parse_variables() {
+  UKIOUT="/boot/efi/EFI/Dystopian/$1-$(date "+%Y%m%d_%H%M").efi"
+  CMDLINE_FILE="/etc/kernel/cmdline-${1#*-}"
+  KERNEL="/boot/vmlinuz-${1}"
+  INITRD="/boot/initramfs-${1}.img"
+
+  if [ ! -f "$KERNEL" ]; then
+    echo "Error: Kernel file not found: $KERNEL" >&2
+    exit 1
+  fi
+
+  if [ ! -f "$INITRD" ]; then
+      echo "Error: Initramfs file not found: $INITRD" >&2
+      exit 1
+  fi
+
+  if [ ! -f "$STUB" ]; then
+      echo "Error: EFI stub not found: $STUB" >&2
+      exit 1
+  fi
+}
+
+
+remove_bundle() {
+  while read -r bdlpath; do
+    if [ "$(basename "$bdlpath")" =~ ^${bundle} ]; then
+      rm -f -- "$bdlpath" || {
+        echo "Failed removing UKI at: $bdlpath" >&2
+        exit 1
+      }
+      echo "Successfully removed UKI: $bdlpath"
+    fi
+  done < "$(find /boot/efi/EFI/Dystopian -type f)"
+}
+
+
+create_bundle() {
+  parse_variables "$1"
+  if [ -f "$CMDLINE_FILE" ]; then
+    CMDLINE=$(cat "$CMDLINE_FILE")
+  elif [ ! -f "$CMDLINE_FILE" ]; then
+    CMDLINE=$(cat /proc/cmdline)
+  fi
+
+  [ -z "$CMDLINE" ] && echo "No CMDLINE found" >&2 && exit1
+
+  # Prepare os-release file
+  if [ -f "$OSREL_FILE" ]; then
+      cp "$OSREL_FILE" "$TMPDIR/os-release"
+  else
+      echo "Warning: No os-release file found, creating minimal version"
+      echo "ID=dystopian" > "$TMPDIR/os-release"
+      echo "VERSION_ID=1" >> "$TMPDIR/os-release"
+  fi
+
+  # Create combined initramfs with microcode
+  echo "Creating combined initramfs with microcode (if available)..."
+  if [ -f "$INTEL_UCODE" ] && [ -f "$AMD_UCODE" ]; then
+      cat "$INTEL_UCODE" "$AMD_UCODE" "$INITRD" > "$TMPDIR/combined.img"
+  elif [ -f "$INTEL_UCODE" ]; then
+      cat "$INTEL_UCODE" "$INITRD" > "$TMPDIR/combined.img"
+  elif [ -f "$AMD_UCODE" ]; then
+      cat "$AMD_UCODE" "$INITRD" > "$TMPDIR/combined.img"
+  else
+      cp "$INITRD" "$TMPDIR/combined.img"
+  fi
+
+  echo "Creating unified kernel image with objcopy: $UKIOUT"
+  objcopy \
+    --add-section .osrel="$TMPDIR/os-release" --change-section-vma .osrel=0x20000 \
+    --add-section .cmdline="$(printf "%s" "$CMDLINE")" --change-section-vma .cmdline=0x30000 \
+    --add-section .linux="$KERNEL" --change-section-vma .linux=0x40000 \
+    --add-section .initrd="$TMPDIR/combined.img" --change-section-vma .initrd=0x3000000 \
+    "$STUB" "$UKIOUT" || {
+      echo "Failed to create unified kernel image: $UKIOUT" >&2
+      exit 1
+    }
+  echo "Successfully created unified kernel image: $UKIOUT"
+}
+
+
+sign_bundle() {
+  while read -r bdlpath; do
+    if [ "$(basename "$bdlpath")" =~ ^${bundle} ]; then
+      sbsign --key "$KEY" --cert "$CERT" "$bdlpath"
+      if sbverify --cert "$CERT" "$bdlpath"; then
+        printf "\033[32m%s\033[0m %s" "Successfully signed bundle:" "$bdlpath"
+      fi
+    fi
+  done < "$(find /boot/efi/EFI/Dystopian -type f)"
+}
+
+
+process_pkgs() {
+  for pkg in $1; do
+    if [[ $pkg =~ ^linux ]]; then
+      [[ ! $pkg =~ .*headers.* ]] && continue
+      [[ ! "$(pacman -Qql "$pkg" | tail -1)" =~ vmlinuz$ ]] && continue
+      PKGNAMES+=("$pkg")
+    fi
+  done
+  [[ "${#PKGNAMES[@]}" -eq 0 ]] && return 1
+  return 0
+}
+
+
+process_paths() {
+  local name path
+  for path in $1; do
+    PATHS+=("$path")
+    name=$(basename "$path")
+    if [[ $name =~ ^vmlinuz|^initramfs|^cmdline ]]; then
+      PKGNAMES+=("linux-${name#*-}")
+    elif [[ $name =~ stub$|ucode\.img$|^os-rel ]]; then
+      for k in $(find /boot -maxdepth 1 -type f -name "vmlinuz*" -exec basename {} \; 2>/dev/null | sed 's/^vmlinuz-//'); do
+        PKGNAMES+=("$k")
+      done
+    fi
+  done
+  [[ "${#PKGNAMES[@]}" -eq 0 ]] && return 1
+  return 0
+}
+
+
+case "$1" in
+  path)
+    shift
+    if process_paths "$1"; then
+      for bundle in "${PKGNAMES[@]}"; do
+        sign_bundle "$bdlpath"
+      done
+    fi
+    ;;
+
+  pkgupg)
+    shift
+    if process_pkgs "$1"; then
+      for pkg in "${PKGNAMES[@]}"; do
+        create_bundle "$pkg"
+      done
+    fi
+    ;;
+
+  pkgrem)
+    shift
+    if process_pkgs "$1"; then
+      for pkg in "${PKGNAMES[@]}"; do
+        remove_bundles "$pkg"
+      done
+    fi
+    ;;
+
+esac

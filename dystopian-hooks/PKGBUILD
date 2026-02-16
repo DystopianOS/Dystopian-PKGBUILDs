@@ -1,0 +1,76 @@
+# Maintainer: DCx7C5 <dcxdevelopment at protonmail dot com>
+# Contributor: DCx7C5 <dcxdevelopment at protonmail dot com>
+# Project: Dystopian Project
+
+pkgbase=dystopian-hooks
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="A package for Dystopian ALPM Hooks"
+arch=('x86_64')
+url="https://github.com/Dystopian-Project/Dystopian-PKGBUILDS"
+license=('MIT')
+makedepends=(
+  'git'
+)
+
+depends=(
+  'pacman'
+  'binutils'
+  'sbsigntools'
+)
+
+provides=('dystopian-hooks')
+conflicts=('dystopian-hooks')
+
+install="${pkgbase}.install"
+
+_srcname=${pkgbase}-${pkgver%.*}
+_srctag=v${pkgver%.*}-${pkgver##*.}
+
+source=(
+  'orphans-hook'
+  'pacnew-check.hook'
+  'bundle-remove.hook'
+  '98-bundle-create.hook'
+  '99-bundle-sign.hook'
+  'dystopian-hooks-runner'
+)
+
+sha512sums=(
+  'a313222388238cfeb7ebdfb886739553fdfb6bb09436bfc08d43c4be516d7a79'
+  '5d4955f1d0c570bad7900310dc60fcda2120919fd74d3d8af3552a97677f987e'
+  'eec418b99c102038c60e6cfaf91505db8ac3c42a3f7d9faf921cf92bf884aa58'
+  'd0ae517033c0524064202a4dfdc48f72c9b99e8310535ea84032b7f9e5345db5'
+  '9234a69998220bc853dff5da8913b5c854476df06901cecb806cf27776c26d55'
+  '3e1b061deb3626cabb1d5c4285a51792cc2a78f301385982517ba83bb91515b5'
+)
+
+b2sums=(
+  '8e04bde10bf88305bf9c8b78aebd45e0ea2061775d2c89532d8a2f770a512fb63fd8ce2dfcae3d9ed3c8de8e617cd424a6fe9c72f564321b93601a74d2adf89d'
+  'c8eef08fd8ecd4e76c58856ad903ad944959a321321f9f3419d015eae006b29299e9411c30956383be4ca01e694c9cb7dc84a004091ea4b4788141e0c394400b'
+  '99e2d6f911fc50531e25db6620a4ebb37140ca5401961ddca885900f3a1574ceaddb3bcf5c31eb0e5a93f306e3e9dffbcc4f065511a719ab3277fdafab934a90'
+  '108f048d343912dec6decec03b668e5dd32ed8268114628a6b722d5adda7103d94b33d37b2df316c16981cc3af9b6dbe261df616a7cb92250ebc20ebb1a3db51'
+  'cb1354c575d70dd319b086daec43ffb8c0fd9b0426e61f4d1555c131877e5e050faef8b58a44f46181f9c0e65be4e98af1b96bdae795c146e0f13e10f9628b71'
+  '12251d9e5b44b8747ebcd04995da43e76471b060952b274464187f0c41101e253dc39c875789ea53ff5f3935cc60d4f8b2bc1b9d714471d34362822b3f48ce45'
+)
+
+
+
+
+package() {
+  cd "${srcdir}" || exit
+
+  install -d "${pkgdir}"/usr/share/libalpm/hooks
+  install -Dm644 orphans.hook "${pkgdir}"/usr/share/libalpm/hooks/orphans.hook
+  install -Dm644 pacnew-check.hook "${pkgdir}"/usr/share/libalpm/hooks/pacnew-check.hook
+  install -Dm644 98-bundle-create.hook "${pkgdir}"/usr/share/libalpm/hooks/98-bundle-create.hook
+  install -Dm644 99-bundle-sign.hook "${pkgdir}"/usr/share/libalpm/hooks/99-bundle-sign.hook
+  install -Dm644 bundle-remove.hook "${pkgdir}"/usr/share/libalpm/hooks/bundle-remove.hook
+
+  install -d "${pkgdir}"/usr/share/libalpm/scripts
+  install -Dm755 dystopian-sbhooks-runner "${pkgdir}"/usr/share/libalpm/scripts/dystopian-sbhooks-runner
+
+  install -d "${pkgdir}"/var/lib/dystopian
+}
+
+# vim:set ts=8 sts=2 sw=2 et:

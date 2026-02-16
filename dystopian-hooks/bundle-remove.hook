@@ -1,0 +1,10 @@
+[Trigger]
+Type = Package
+Operation = Remove
+Target = linux*
+Target = linux-headers*
+
+[Action]
+Description = Signing unified kernel bundle...
+When = PostTransaction
+Exec = /usr/bin/bash -c 'dystopian-hooks-runner "pkgrem" "$@"'

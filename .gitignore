@@ -1,0 +1,16 @@
+*~
+*.tar.gz
+*.tar.xz
+.kateproject.d
+*.sig
+.idea/
+.venv/
+*.pyc
+*.pyo
+
+*.egg-info/
+build/
+dist/
+
+.gnupg/
+*.sha512

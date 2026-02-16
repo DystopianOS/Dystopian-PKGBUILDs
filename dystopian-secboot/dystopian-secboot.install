@@ -1,0 +1,137 @@
+#!/bin/sh
+# Maintainer: DCx7C5 <dcxdevelopment at protonmail dot com>
+# .install for dystopian-secboot package
+set -e
+
+# Helper: create a timestamped gzipped tar backup of a directory if it exists.
+# $1 = absolute directory path (e.g. /etc/dystopian/crypto)
+backup_targz() {
+  path="${1:+$(realpath "$1")}"
+  dirname="$(basename "$path")"
+  parent="$(dirname "$path")"
+  [ -d "$path" ] || return 0
+  # choose a timestamped name (YYYYmmdd_HHMMSS) and avoid collisions by adding a counter
+  ts="$(date +%Y%m%d_%H%M%S)"
+  outfile="${dirname}.bkp.${ts}.tar.gz"
+  cnt=0
+  while [ -e "$outfile" ]; do
+    cnt=$((cnt + 1))
+    outfile="${dirname}.bkp.${ts}.${cnt}.tar.gz"
+  done
+  # create tarball from parent so archive contains base/...
+  if tar -C "$parent" -czf "$outfile" "$dirname" 2>/dev/null; then
+    printf 'Created backup: %s\n' "$outfile"
+  else
+    printf 'Failed to create backup: %s\n' "$outfile" >&2
+    rm -f -- "$outfile" 2>/dev/null || true
+    return 1
+  fi
+  return 0
+}
+
+# Helper: ensure expected /etc directories exist with proper permissions
+ensure_etc_dirs() {
+  [ -d /etc/dystopian/secboot ] || install -d -m 700 /etc/dystopian/secboot
+  [ -d /etc/dystopian/secboot/ms ] || install -d -m 700 /etc/dystopian/secboot/ms
+}
+
+
+ensure_db_files() {
+  confroot="/usr/share/dystopian-tools/conf"
+
+  # dystopian-secboot
+  if [ ! -f /etc/dystopian/secboot/secboot-db.json ]; then
+    if [ -f "$confroot/secboot-db.json" ]; then
+      install -m 600 "$confroot/secboot-db.json" /etc/dystopian/secboot/secboot-db.json
+    fi
+  else
+    chmod 600 /etc/dystopian/secboot/secboot-db.json || true
+  fi
+}
+
+
+# Helper: locate latest timestamped backup file for a directory (returns path or empty)
+# $1 = absolute directory path
+latest_backup_for() {
+  src="$1"
+  # Print matches, sort lexicographically, pick the last (latest timestamp).
+  # If no matches exist, the pipeline returns empty.
+  LC_ALL=C printf '%s\n' "${src}.bkp."*.tar.gz 2>/dev/null | \
+    sort 2>/dev/null | tail -n 1 2>/dev/null || true
+}
+
+
+# Helper: check that critical files for a component exist after upgrade.
+# Returns 0 if checks pass, non-zero otherwise.
+checks_pass_for() {
+  # must have DB file
+  [ -f /etc/dystopian/secboot/secboot-db.json ] || return 1
+  # succeed only if at least one other file exists under the component (excluding the DB)
+  if find /etc/dystopian/secboot -type f ! -name 'secboot-db.json' -print -quit 2>/dev/null | grep -q .; then
+    return 0
+  fi
+  return 1
+}
+
+# Helper: remove latest backup archive if checks pass for component
+# $1 = component short name
+prune_backup_if_ok() {
+  comp="$1"
+  src="${comp}"
+  bkp="$(latest_backup_for "$src")"
+  [ -n "$bkp" ] || return 0
+
+  if checks_pass_for "$comp"; then
+    rm -f -- "$bkp" && printf 'Removed backup: %s\n' "$bkp"
+  else
+    printf 'Keeping backup %s: critical checks failed for %s\n' "$bkp" "$comp" >&2
+  fi
+}
+
+# -------------------------
+# Top-level package hooks
+# -------------------------
+pre_install() {
+  :
+}
+
+post_install() {
+  ensure_etc_dirs
+  ensure_db_files
+}
+
+pre_upgrade() {
+  # create backups for safety
+  backup_dir "/etc/dystopian/secboot"
+}
+
+post_upgrade() {
+  # ensure dirs exist, then verify component health and prune backups if all good
+  ensure_etc_dirs
+  ensure_db_files
+  # Run component checks and prune latest backup for each if checks pass.
+  # If any check fails, the corresponding backup is kept for recovery.
+  prune_backup_if_ok "/etc/dystopian/secboot"
+}
+
+pre_remove() {
+  backup_dir "/etc/dystopian/secboot"
+}
+
+post_remove() {
+  :
+}
+
+# -------------------------------------------------------
+# Subpackage-specific hooks (underscored names expected by makepkg)
+# -------------------------------------------------------
+
+dystopian_secboot_pre_install() { :; }
+dystopian_secboot_post_install() {
+  [ -d /etc/dystopian/secboot ] || install -d -m 700 /etc/dystopian/secboot
+  [ -d /etc/dystopian/secboot/ms ] || install -d -m 700 /etc/dystopian/secboot/ms
+}
+dystopian_secboot_pre_upgrade() { backup_dir "/etc/dystopian/secboot"; }
+dystopian_secboot_post_upgrade() { ensure_etc_dirs; ensure_db_files; prune_backup_if_ok "dystopian-secboot"; }
+dystopian_secboot_pre_remove() { backup_dir "/etc/dystopian/secboot"; }
+dystopian_secboot_post_remove() { :; }

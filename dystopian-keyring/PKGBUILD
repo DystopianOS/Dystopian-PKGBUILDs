@@ -1,0 +1,20 @@
+# Maintainer: Dystopian <dcxdevelopment at protonmail dot com>
+# Co-Maintainer: DCx7C5 <dcxdevelopment at protonmail dot com>
+
+pkgname=dystopian-keyring
+pkgver=20251206
+pkgrel=1
+pkgdesc="GPG keys for Dystopian repositories"
+arch=('any')
+license=('GPL3')
+install=dystopian-keyring.install
+source=('dystopian.gpg')
+sha512sums=('bccb043bd0da42e0e7f83d77c76f4d988ec92f7e2133621782acd6060dce91d48fce87653833884c1eb95c793bf549797dbb33cdfb56843c45c355d14bfc2be7')
+b2sums=('0b082b3a2f97adcd31ca7e5c4d6c8743684acd38fbd2c1c222a18c10b1a79cca1ed82189c7a559273e050dd0b88e4808fbb4d1b4858a9a89a4ea54a8d529e3f5')
+install=dystopian-keyring.install
+verifypgpkeys=('14A71FEDA1F764F7075FFA40FF64D67D0F00DD12'
+               'C71C37EA17233736B9FAD43EFAD24DA0784D363A')
+
+package() {
+    install -Dm644 dystopian.gpg "${pkgdir}/usr/share/pacman/keyrings/dystopian.gpg"
+}

@@ -1,0 +1,25 @@
+# Maintainer: Dystopian <dcxdevelopment at protonmail dot com>
+# Co-Maintainer: DCx7C5 <dcxdevelopment at protonmail dot com>
+
+pkgname=dystopian-settings
+pkgdesc="Dystopian system settings and configuration (metapackage)"
+pkgver=0.1.0
+pkgrel=1
+arch=('any')
+url="https://github.com/Dystopian-Project/dystopian-repo"
+license=('GPL-3.0-or-later')
+depends=(
+    # Base system settings and configuration
+    # "dystopian-base-settings"   # Core system settings and configurations for Dystopian
+    # "dystopian-desktop-settings"  # Desktop environment specific settings (if applicable)
+    # "dystopian-power-management"  # Power management tools and configurations
+    # "dystopian-performance-tuning"  # Performance tuning tools and configurations
+)
+optdepends=(
+    "dystopian-cpu-profile-intel: Dystopian CPU profile for modern Intel CPUs (if applicable)"
+    "dystopian-cpu-profile-amd: Dystopian CPU profile for modern AMD CPUs (if applicable)"
+    "dystopian-gpu-profile-nvidia-nouveau: Dystopian NVIDIA GPU profile using open-source nouveau driver (if applicable)"
+    "dystopian-gpu-profile-nvidia-580xx: Dystopian NVIDIA GPU profile using 580.xx proprietary drivers (if applicable)"
+    "dystopian-gpu-profile-radeon: Dystopian AMD Radeon GPU profile (if applicable)"
+    "dystopian-tpm2-support: Dystopian TPM 2.0 support package (if applicable)"
+)

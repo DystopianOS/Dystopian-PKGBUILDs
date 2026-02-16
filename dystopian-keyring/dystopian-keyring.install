@@ -1,0 +1,2 @@
+post_install()   { pacman-key --populate dystopian; }
+post_upgrade()   { pacman-key --populate dystopian; }

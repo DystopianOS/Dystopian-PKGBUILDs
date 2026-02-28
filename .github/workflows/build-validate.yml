@@ -15,24 +15,32 @@ permissions:
 jobs:
   discover:
     runs-on: ubuntu-latest
-    container: archlinux:base-devel
+    container: archlinux:base-devel-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
-      # 1. Install git FIRST (no checkout yet)
-      - name: Install git in container
-        run: |
-          pacman -Syu --noconfirm --needed git
+      - name: Install git
+        run: pacman -Syu --noconfirm --needed git
 
-      # 2. Now checkout works with submodules
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # submodules: recursive   ← only if you actually need submodules
+
       - id: set-matrix
         run: |
-          dirs=$(find . -maxdepth 2 -type f -name PKGBUILD -not -path '*/\.*' -printf '%h\n' | sed 's|^\./||' | sort -u | jq -R . | jq -s '{ pkgdir: . }')
-          echo "matrix=$dirs" >> "$GITHUB_OUTPUT"
-          echo "Matrix size: $(echo "$dirs" | jq '.pkgdir | length')"
+          pkg_dirs=$(find . -maxdepth 2 -type f -name PKGBUILD -not -path '*/\.*' -printf '%h\n' |
+                     sed 's|^\./||' |
+                     sort -u)
+          
+          # Escape and format as JSON array
+          json_array=$(echo "$pkg_dirs" | sed 's/"/\\"/g; s/^/"/; s/$/",/' | tr '\n' ' ' | sed 's/,$//')
+          
+          matrix="{ \"pkgdir\": [${json_array}] }"
+          
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          count=$(echo "$pkg_dirs" | wc -l)
+          echo "Matrix size: $count"
 
   build:
     needs: discover

@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: archlinux:base-devel
-      options: --user root
+      options: --user 1001:127
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
@@ -48,7 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: archlinux:base-devel
-      options: --user root
+      options: --user 1001:127
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.discover.outputs.matrix) }}
@@ -59,26 +59,18 @@ jobs:
           # But prefer: install everything in a separate root step/job if possible
           sudo pacman -Syu --noconfirm --needed git gnupg namcap || true  # ← sudo if wheel/sudo configured
 
-      - uses: actions/checkout@v4
+      - name: Checkout repository (for build) → ${{ matrix.pkgdir }}
+        uses: actions/checkout@v4
 
-
-      - name: Install dependencies
+      - name: Install dependencies (inside container) → ${{ matrix.pkgdir }}
         run: |
           pacman -Syu --noconfirm --needed base-devel git gnupg namcap
 
-      - name: Import GPG key (if provided)
-        env:
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-        run: |
-          if [ -n "$GPG_PRIVATE_KEY" ]; then
-            echo "$GPG_PRIVATE_KEY" | gpg --batch --yes --passphrase "$GPG_PASSPHRASE" --import
-            gpg --list-secret-keys --keyid-format LONG
-            echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
-            gpg-connect-agent reloadagent /bye || true
-          else
-            echo "No GPG key → unsigned build"
-          fi
+      - name: Import GPG key (inside container) → ${{ matrix.pkgdir }}
+        uses: DCx7C5/actions/import-gpg-key@v1
+        with:
+          from_secrets: 'true'
+          pass: ''
 
       - name: Build & sign package → ${{ matrix.pkgdir }}
         continue-on-error: true

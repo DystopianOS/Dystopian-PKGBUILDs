@@ -6,6 +6,8 @@ on:
     paths: ['**/PKGBUILD', '**/PKGBUILD.*']
   pull_request:
     paths: ['**/PKGBUILD', '**/PKGBUILD.*']
+  workflow_dispatch:
+
 
 permissions:
   contents: write
@@ -15,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: archlinux:base-devel
-      options: --user root
+      options: --user 1001:127
 
     steps:
       - name: Checkout repository with full history

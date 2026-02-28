@@ -47,7 +47,7 @@ jobs:
     needs: discover
     runs-on: ubuntu-latest
     container:
-      image: archlinux:base-devel-latest
+      image: archlinux:base-devel
       options: --user 1000:1000     # ← Keep non-root for makepkg safety
     strategy:
       fail-fast: false

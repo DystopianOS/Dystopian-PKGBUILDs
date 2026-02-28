@@ -25,9 +25,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install git
-        run: pacman -Syu --noconfirm --needed git
-
       - name: Update checksums & .SRCINFO where needed
         run: |
           set -euo pipefail

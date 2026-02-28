@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: archlinux:base-devel
-      options: --user root          # ← Add this: run as root
+      options: --user 1000:1000
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
@@ -48,7 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: archlinux:base-devel
-      options: --user 1000:1000     # ← Keep non-root for makepkg safety
+      options: --user 1000:1000
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.discover.outputs.matrix) }}

@@ -13,7 +13,9 @@ permissions:
 jobs:
   update:
     runs-on: ubuntu-latest
-    container: archlinux:base-devel
+    container:
+      image: archlinux:base-devel
+      options: --user root
 
     steps:
       - name: Checkout repository with full history

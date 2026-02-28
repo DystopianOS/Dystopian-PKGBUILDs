@@ -60,8 +60,7 @@ jobs:
           sudo pacman -Syu --noconfirm --needed git gnupg namcap || true  # ← sudo if wheel/sudo configured
 
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive   # only if needed
+
 
       - name: Install dependencies
         run: |

@@ -20,12 +20,15 @@ jobs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
       - uses: actions/checkout@v4
-        with: { submodules: recursive }
+        with:
+          fetch-depth: 0
+          submodules: recursive
 
       - id: set-matrix
         run: |
-          dirs=$(find . -maxdepth 2 -type f -name PKGBUILD -printf '%h\n' | sort -u | sed 's|^\./||' | jq -R . | jq -s '{ pkgdir: . }')
+          dirs=$(find . -maxdepth 2 -type f -name PKGBUILD -not -path '*/\.*' -printf '%h\n' | sed 's|^\./||' | sort -u | jq -R . | jq -s '{ pkgdir: . }')
           echo "matrix=$dirs" >> "$GITHUB_OUTPUT"
+          echo "Matrix size: $(echo "$dirs" | jq '.pkgdir | length')"
 
   build:
     needs: discover
@@ -37,15 +40,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.discover.outputs.matrix) }}
-
     steps:
       - uses: actions/checkout@v4
-        with: { submodules: recursive }
+        with:
+          submodules: recursive
 
-      - run: |
+      - name: Install dependencies
+        run: |
           pacman -Syu --noconfirm --needed base-devel git gnupg namcap
 
-      - name: Import GPG key for signing
+      - name: Import GPG key (if provided)
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
@@ -54,36 +58,35 @@ jobs:
             echo "$GPG_PRIVATE_KEY" | gpg --batch --yes --passphrase "$GPG_PASSPHRASE" --import
             gpg --list-secret-keys --keyid-format LONG
             echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
-            gpg-connect-agent reloadagent /bye
+            gpg-connect-agent reloadagent /bye || true
           else
-            echo "No GPG key provided – building unsigned packages"
+            echo "No GPG key → unsigned build"
           fi
 
       - name: Build & sign package → ${{ matrix.pkgdir }}
-        id: build
         continue-on-error: true
         working-directory: ${{ matrix.pkgdir }}
         run: |
-          GPG_KEYID=$(gpg --list-secret-keys --keyid-format LONG | grep -oP '(?<=sec\s+)[^/]+' | head -1 || echo "")
-          makepkg -s --noconfirm ${GPG_KEYID:+--sign --key $GPG_KEYID}
+          KEYID=$(gpg --list-secret-keys --keyid-format LONG | grep -oP '(?<=sec\s+)[^/]+' | head -1 || echo "")
+          makepkg -s --noconfirm ${KEYID:+--sign --key $KEYID}
 
       - name: namcap validation → ${{ matrix.pkgdir }}
-        id: namcap
         continue-on-error: true
         working-directory: ${{ matrix.pkgdir }}
         run: |
           for pkg in *.pkg.tar.zst; do
+            [ -f "$pkg" ] || continue
             namcap -i "$pkg" > namcap-${{ matrix.pkgdir }}.txt 2>&1 || true
           done
 
-      - name: Upload per-package results
+      - name: Upload per-package artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: result-${{ matrix.pkgdir }}
           path: |
             ${{ matrix.pkgdir }}/*.pkg.tar.*
-            ${{ matrix.pkgdir }}/*.pkg.tar.*.sig   # signed packages
+            ${{ matrix.pkgdir }}/*.pkg.tar.*.sig
             ${{ matrix.pkgdir }}/namcap-*.txt
           if-no-files-found: warn
           retention-days: 2
@@ -114,43 +117,38 @@ jobs:
             failed_build=false
             failed_namcap=false
 
-            if [[ -z "$pkg_files" ]]; then
-              failed_build=true
-            fi
-
-            if [[ -f "$namcap_file" ]] && grep -qiE 'error|warning' "$namcap_file"; then
-              failed_namcap=true
-            fi
+            [[ -z "$pkg_files" ]] && failed_build=true
+            [[ -f "$namcap_file" ]] && grep -qiE 'error|warning' "$namcap_file" && failed_namcap=true
 
             if [[ $failed_build == true || $failed_namcap == true ]]; then
               HAS_FAILURES=true
               SUMMARY+="### $dir\n"
-              [[ $failed_build == true ]] && SUMMARY+="- **Build/sign failed**\n"
-              [[ $failed_namcap == true ]] && SUMMARY+="- **namcap issues** (see artifact)\n\n"
+              [[ $failed_build == true ]] && SUMMARY+="- Build/sign failed\n"
+              [[ $failed_namcap == true ]] && SUMMARY+="- namcap found issues\n\n"
             fi
           done
 
-          echo "summary<<EOF" >> $GITHUB_OUTPUT
-          echo "$SUMMARY" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-          echo "has_failures=$HAS_FAILURES" >> $GITHUB_OUTPUT
+          {
+            echo "summary<<EOF"
+            echo "$SUMMARY"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "has_failures=$HAS_FAILURES" >> "$GITHUB_OUTPUT"
 
-          echo -e "$SUMMARY" >> $GITHUB_STEP_SUMMARY
+          echo -e "$SUMMARY" >> "$GITHUB_STEP_SUMMARY"
 
   report:
     needs: aggregate-failures
     if: always() && needs.aggregate-failures.outputs.has_failures == 'true' && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - name: Comment failure summary on PR
-        if: github.event_name == 'pull_request' && needs.aggregate-failures.outputs.has_failures == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh pr comment ${{ github.event.pull_request.number }} --body "
-          ### :warning: Build / Validation Failures
+      - name: Comment on PR
+        uses: peter-evans/create-or-update-comment@v5
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            ### :warning: Some packages failed validation / build
 
-          ${{ needs.aggregate-failures.outputs.summary }}
+            ${{ needs.aggregate-failures.outputs.summary }}
 
-          Artifacts contain namcap logs & built files (signed or not).
-          "
+            → Check artifacts for namcap logs and package files

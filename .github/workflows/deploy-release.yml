@@ -25,29 +25,31 @@ jobs:
           path: artifacts/
           merge-multiple: true
 
-      - name: Create & sign repo database
+      - name: Create & sign repository database
         working-directory: artifacts
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
-          REPO="custom-repo"   # ← CHANGE THIS
-          SIGN_OPTS=""
+          REPO_NAME="repo"   # ← CHANGE THIS TO YOUR ACTUAL REPO NAME
 
-          # Try to import key again (in case deploy runs in separate runner)
-          if [[ -n "${{ secrets.GPG_PRIVATE_KEY }}" ]]; then
-            echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --yes --passphrase "${{ secrets.GPG_PASSPHRASE }}" --import
-            gpg-connect-agent reloadagent /bye
+          SIGN_OPTS=""
+          if [ -n "$GPG_PRIVATE_KEY" ]; then
+            echo "$GPG_PRIVATE_KEY" | gpg --batch --yes --passphrase "$GPG_PASSPHRASE" --import
+            gpg-connect-agent reloadagent /bye || true
             KEYID=$(gpg --list-secret-keys --keyid-format LONG | grep -oP '(?<=sec\s+)[^/]+' | head -1 || echo "")
-            [[ -n "$KEYID" ]] && SIGN_OPTS="--sign --key $KEYID"
+            [ -n "$KEYID" ] && SIGN_OPTS="--sign --key $KEYID"
           fi
 
-          repo-add $SIGN_OPTS "$REPO.db.tar.gz" *.pkg.tar.zst
-          ln -sf "$REPO.db.tar.gz" "$REPO.db"
+          repo-add $SIGN_OPTS "$REPO_NAME.db.tar.gz" *.pkg.tar.zst
+          ln -sf "$REPO_NAME.db.tar.gz" "$REPO_NAME.db"
 
-      - name: Deploy signed artifacts to release tag "repository"
+      - name: Upload to release tag "repository"
         env:
           GH_TOKEN: ${{ github.token }}
         working-directory: artifacts
         run: |
-          REPO_NAME="custom-repo"   # ← CHANGE THIS
+          REPO_NAME="repo"   # ← CHANGE THIS TO YOUR ACTUAL REPO NAME
 
           gh release upload repository \
             *.pkg.tar.zst \
@@ -60,5 +62,5 @@ jobs:
           gh release view repository 2>/dev/null || \
             gh release create repository \
               --title "Custom Arch Repository" \
-              --notes "Signed binary packages for Arch Linux" \
+              --notes "Signed binary packages built via GitHub Actions" \
               --target main

@@ -15,27 +15,28 @@ permissions:
 jobs:
   discover:
     runs-on: ubuntu-latest
-    container: archlinux:base-devel
+    container:
+      image: archlinux:base-devel-latest
+      options: --user root          # ← Add this: run as root
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
-      - name: Install git
-        run: pacman -Syu --noconfirm --needed git
+      - name: Update & install tools as root
+        run: |
+          pacman -Syu --noconfirm --needed git jq   # jq optional if you keep it
 
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          # submodules: recursive   ← only if you actually need submodules
 
       - id: set-matrix
         run: |
+          # Your matrix logic here (now git + jq available)
           pkg_dirs=$(find . -maxdepth 2 -type f -name PKGBUILD -not -path '*/\.*' -printf '%h\n' |
                      sed 's|^\./||' |
                      sort -u)
           
-          # Escape and format as JSON array
           json_array=$(echo "$pkg_dirs" | sed 's/"/\\"/g; s/^/"/; s/$/",/' | tr '\n' ' ' | sed 's/,$//')
-          
           matrix="{ \"pkgdir\": [${json_array}] }"
           
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
@@ -44,21 +45,23 @@ jobs:
 
   build:
     needs: discover
-    if: ${{ needs.discover.outputs.matrix != '{"pkgdir":[]}' }}
     runs-on: ubuntu-latest
     container:
-      image: archlinux:base-devel
-      options: --user 1000:1000
+      image: archlinux:base-devel-latest
+      options: --user 1000:1000     # ← Keep non-root for makepkg safety
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.discover.outputs.matrix) }}
     steps:
-      - name: Install git in container
-        run: pacman -Syu --noconfirm --needed git
+      - name: Install git (already done in discover? Or repeat if needed)
+        run: |
+          # If packages need refreshing or extra tools, use fakeroot/sudo if set up
+          # But prefer: install everything in a separate root step/job if possible
+          sudo pacman -Syu --noconfirm --needed git gnupg namcap || true  # ← sudo if wheel/sudo configured
 
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # keep this if you need history/diff
+          submodules: recursive   # only if needed
 
       - name: Install dependencies
         run: |

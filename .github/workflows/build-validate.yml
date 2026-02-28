@@ -46,15 +46,18 @@ jobs:
           pacman -Syu --noconfirm --needed base-devel git gnupg namcap
 
       - name: Import GPG key for signing
-        if: secrets.GPG_PRIVATE_KEY != ''
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
-          echo "$GPG_PRIVATE_KEY" | gpg --batch --yes --passphrase "$GPG_PASSPHRASE" --import
-          gpg --list-secret-keys --keyid-format LONG
-          echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
-          gpg-connect-agent reloadagent /bye
+          if [ -n "$GPG_PRIVATE_KEY" ]; then
+            echo "$GPG_PRIVATE_KEY" | gpg --batch --yes --passphrase "$GPG_PASSPHRASE" --import
+            gpg --list-secret-keys --keyid-format LONG
+            echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
+            gpg-connect-agent reloadagent /bye
+          else
+            echo "No GPG key provided – building unsigned packages"
+          fi
 
       - name: Build & sign package → ${{ matrix.pkgdir }}
         id: build

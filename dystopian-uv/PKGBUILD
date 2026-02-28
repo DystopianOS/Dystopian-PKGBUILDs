@@ -1,0 +1,42 @@
+# Maintainer: Dystopian <dcxdevelopment at protonmail dot com>
+# Co-Maintainer: DCx7C5 <dcxdevelopment at protonmail dot com>
+
+pkgname=dystopian-uv
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Dystopian Linux recommended uv toolchain - official modern, secure, and extremely fast uv Python toolchain (replaces pip/pipx/poetry/pyenv)"
+arch=('any')
+url="https://astral.sh/uv"
+license=('Apache-2.0' 'MIT')
+depends=(
+  'python'           # your optimized Dystopian Python
+  'uv'               # CLI tool
+  'python-uv-build'  # Secure, fast PEP 517 build backend for packaging
+)
+optdepends=(
+  'ruff: extremely fast Python linter & formatter (uv tool install ruff)'
+  'black: uncompromising code formatter'
+  'mypy: static type checker'
+  'pre-commit: git hook framework'
+  'python-uv: Python bindings/wrapper for uv (rarely needed)'
+)
+
+validpgpkeys=('14A71FEDA1F764F7075FFA40FF64D67D0F00DD12'
+              'C71C37EA17233736B9FAD43EFAD24DA0784D363A')
+
+replaces=('python-pip' 'python-pipx')
+conflicts=('python-pip' 'python-pipx' 'python-poetry')
+
+install=dystopian-uv.install
+
+pkgver() {
+  if command -v uv >/dev/null 2>&1; then
+    uv --version | awk '{print $2}' | sed 's/^v//'
+  else
+    echo "0.1.0"
+  fi
+}
+
+package() {
+  true
+}

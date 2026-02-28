@@ -1,0 +1,50 @@
+name: Update PKGBUILD checksums & .SRCINFO
+
+on:
+  push:
+    branches: [main]
+    paths: ['**/PKGBUILD', '**/PKGBUILD.*']
+  pull_request:
+    paths: ['**/PKGBUILD', '**/PKGBUILD.*']
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - run: pacman -Syu --noconfirm --needed git
+
+      - name: Update checksums where needed
+        run: |
+          set -euo pipefail
+          changed_dirs=$(git diff --name-only ${{ github.event.before || 'HEAD^' }} ${{ github.sha }} | grep -E '/PKGBUILD$' | xargs -r dirname | sort -u)
+
+          [[ -z "$changed_dirs" ]] && exit 0
+
+          for dir in $changed_dirs; do
+            cd "$dir"
+            makepkg --printsrcinfo > .tmp.SRCINFO
+
+            need_update=false
+            [[ ! -f .SRCINFO || ! $(diff -q .SRCINFO .tmp.SRCINFO) ]] && need_update=true
+            grep -qE '^\s*(sha[0-9]+|b2|md5)sums\s*=\s*\(\s*\)' PKGBUILD && need_update=true
+
+            if [[ $need_update = true ]]; then
+              updpkgsums
+              makepkg --printsrcinfo > .SRCINFO
+              git add PKGBUILD .SRCINFO
+            fi
+            cd - >/dev/null
+          done
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "ci: update checksums & .SRCINFO" || echo "No changes"
+          git push

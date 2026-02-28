@@ -1,0 +1,22 @@
+# Maintainer: Dystopian <dcxdevelopment at protonmail dot com>
+# Co-Maintainer: DCx7C5 <dcxdevelopment at protonmail dot com>
+
+pkgname=dystopian-mirrorlist
+pkgver=20260218
+pkgrel=1
+pkgdesc="Dystopian Linux mirrorlist"
+arch=('any')
+url="https://dystopianlinux.org"
+license=('GPL-3.0-or-later')
+backup=('etc/pacman.d/dystopian-mirrorlist')
+
+source=(dystopian-mirrorlist)
+
+validpgpkeys=('14A71FEDA1F764F7075FFA40FF64D67D0F00DD12'
+              'C71C37EA17233736b9fad43efad24da0784d363a')
+
+package() {
+  cd "$srcdir"
+
+  install -Dm644 dystopian-mirrorlist "$pkgdir"/etc/pacman.d/dystopian-mirrorlist
+}

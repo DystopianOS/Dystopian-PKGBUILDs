@@ -1,16 +1,85 @@
 # Maintainer: Dystopian <dcxdevelopment at protonmail dot com>
 # Co-Maintainer: DCx7C5 <dcxdevelopment at protonmail dot com>
 
-pkgname=dystopian-libs
-pkgdesc="Dystopian Libraries (metapackage)"
-pkgver=0.1.0
+
+pkgbase=dystopian-libs
+pkgname=(dystopian-base-libs
+         dystopian-log-libs
+         dystopian-crypto-libs)
+pkgdesc="Dystopian Linux POSIX shell function libraries (for scripts & tools)"
+pkgver=20260218
 pkgrel=1
 arch=('x86_64')
-url="https://github.com/Dystopian-Project/dystopian-repo"
+url="https://github.com/DCx7C5/dystopian-libs"
 license=('GPL-3.0-or-later')
 source=()
+depends=()
+optdepends=()
+makedepends=('git')
+source=("git+${url%.git}.git#branch=main")
 
-depends=(
-    # Core libraries
+validpgpkeys=('14A71FEDA1F764F7075FFA40FF64D67D0F00DD12'
+              'C71C37EA17233736b9fad43efad24da0784d363a')
 
-)
+pkgver() {
+    cd "$srcdir/${pkgname%*-libs}"
+    git describe --long --tags --abbrev=8 2>/dev/null | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g' ||
+      printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short=8 HEAD)"
+}
+
+package_dystopian-base-libs() {
+    pkgdesc="Dystopian Linux base POSIX shell function libraries (for scripts & tools)"
+    depends=('coreutils')
+
+    cd "$srcdir/$pkgbase/lib"
+
+    install -dm755 "$pkgdir"/usr/lib/dystopian
+    install -Dm644 libvariables.sh "$pkgdir"/usr/lib/dystopian/libvariables.sh
+    install -Dm644 libhelper.sh "$pkgdir"/usr/lib/dystopian/libhelper.sh
+}
+
+package_dystopian-log-libs() {
+    pkgdesc="Dystopian Linux POSIX shell function libraries for logging (for scripts & tools)"
+    depends=('dystopian-base-libs')
+
+    cd "$srcdir/$pkgbase/lib"
+
+    install -dm755 "$pkgdir"/usr/lib/dystopian
+    install -Dm644 libapplog.sh "$pkgdir"/usr/lib/dystopian/libapplog.sh
+}
+
+package_dystopian-crypto-libs() {
+    pkgdesc="Dystopian Linux dystopian-crypto POSIX shell function libraries (for scripts & tools)"
+    depends=('dystopian-base-libs' 'openssl' 'gnupg')
+    optdepends=('tpm2-openssl' 'tpm2-tools' 'tpm2-abrmd')
+
+    cd "$srcdir/$pkgbase/lib"
+
+    install -d "$pkgdir/usr/lib/dystopian"
+    install -Dm644 libssl.sh "$pkgdir/usr/lib/dystopian/libssl.sh"
+    install -Dm644 libgpg.sh "$pkgdir/usr/lib/dystopian/libgpg.sh"
+    install -Dm644 libssl-db.sh "$pkgdir/usr/lib/dystopian/libssl-db.sh"
+    install -Dm644 libgpg-db.sh "$pkgdir/usr/lib/dystopian/libgpg-db.sh"
+
+}
+
+package_dystopian-tpm-libs() {
+    pkgdesc="Dystopian Linux TPM POSIX shell function libraries (for scripts & tools)"
+    depends=('dystopian-crypto-libs' 'tpm2-openssl' 'tpm2-tools' 'tpm2-abrmd')
+
+    cd "$srcdir/$pkgbase/lib"
+
+    install -d "$pkgdir/usr/lib/dystopian"
+    install -Dm644 libtpm2.sh "$pkgdir/usr/lib/dystopian/libtpm2.sh"
+}
+
+package_dystopian-exttoken-libs() {
+    pkgdesc="Dystopian Linux ExtToken POSIX shell function libraries (for scripts & tools)"
+    depends=('dystopian-base-libs' 'openssl' 'gnupg')
+    optdepends=('tpm2-openssl' 'tpm2-tools' 'tpm2-abrmd')
+
+    cd "$srcdir/$pkgbase/lib"
+
+    install -d "$pkgdir/usr/lib/dystopian"
+    install -Dm644 libexttoken.sh "$pkgdir/usr/lib/dystopian/libexttoken.sh"
+}

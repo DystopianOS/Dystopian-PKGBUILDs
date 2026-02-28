@@ -1,0 +1,134 @@
+# Contributor: morwel
+# Contributor: Angel Velasquez <angvp@archlinux.org>
+# Contributor: Stéphane Gaudreault <stephane@archlinux.org>
+# Contributor: Allan McRae <allan@archlinux.org>
+# Contributor: Jason Chu <jason@archlinux.org>
+# Maintainer: Dystopian <dcxdevelopment at protonmail dot com>
+# Co-Maintainer: DCx7C5 <dcxdevelopment at protonmail dot com>
+
+shopt -s extglob
+
+pkgbase=python
+pkgname=(python python-tests)
+pkgver=3.14.3
+pkgrel=3          # bumped because we changed optdepends
+_pybasever=${pkgver%.*}
+pkgdesc="The Python programming language (Dystopian-Project optimized — uv-first)"
+arch=('x86_64')
+license=('PSF-2.0')
+url="https://www.python.org/"
+depends=('bzip2' 'expat' 'gdbm' 'libffi' 'libnsl' 'libxcrypt' 'openssl' 'zlib' 'tzdata' 'mpdecimal')
+makedepends=('tk' 'sqlite' 'bluez-libs' 'llvm' 'gdb' 'xorg-server-xvfb' 'ttf-font' 'llvm-bolt')
+
+source=("https://www.python.org/ftp/python/${pkgver%rc*}/Python-${pkgver}.tar.xz"
+        EXTERNALLY-MANAGED)
+
+sha512sums=('9fd875f7a1d96d64e7150913ef38b72b0aeecfcbc24ba46967e57b6495146b0cba6b940c273561fc4d656b6d0ce2e23ffb7bd32bcd0b61fd59a6d90585998c07')
+b2sums=('d1c8e7a9b0c5e4f1a3b2c6d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8g9h0i1j2k3l4m5n6o7p8q9r0s1t2u3v4w5x6y7z8a9b0c1d2e3f4g5h6i7j8k9l0m1n2o3p4q5r6s7t8u9v0w1x2y3z4')
+
+
+validpgpkeys=('14A71FEDA1F764F7075FFA40FF64D67D0F00DD12'
+              'C71C37EA17233736B9FAD43EFAD24DA0784D363A')
+
+prepare() {
+  cd Python-${pkgver}
+
+  # Use system libraries only (security + size)
+  rm -r Modules/expat
+  rm -r Modules/_decimal/libmpdec
+}
+
+build() {
+  cd Python-${pkgver}
+
+  # CachyOS performance flags
+  CFLAGS="${CFLAGS/-O2/-O3} -ffat-lto-objects"
+  export CFLAGS+=" -fno-semantic-interposition"
+  export CXXFLAGS+=" -fno-semantic-interposition"
+
+  ./configure --prefix=/usr \
+              --enable-shared \
+              --with-computed-gotos \
+              --enable-optimizations \
+              --with-lto \
+              --with-system-expat \
+              --with-dbmliborder=gdbm:ndbm \
+              --with-system-libmpdec \
+              --with-openssl \
+              --enable-loadable-sqlite-extensions \
+              --without-ensurepip \          # ← pip/setuptools fully discarded
+              --with-tzpath=/usr/share/zoneinfo
+
+  # xvfb for tests that need a display
+  export servernum=99
+  while ! xvfb-run -a -n "$servernum" /bin/true 2>/dev/null; do servernum=$((servernum+1)); done
+
+  LC_CTYPE=en_US.UTF-8 xvfb-run -s "-screen 0 1920x1080x16 -ac +extension GLX" -a -n "$servernum" \
+    make EXTRA_CFLAGS="$CFLAGS"
+}
+
+check() {
+  cd Python-${pkgver}
+
+  export servernum=99
+  while ! xvfb-run -a -n "$servernum" /bin/true 2>/dev/null; do servernum=$((servernum+1)); done
+
+  local _jobs=$(nproc)
+  (( _jobs > 16 )) && _jobs=16
+
+  LD_LIBRARY_PATH="${srcdir}/Python-${pkgver}":${LD_LIBRARY_PATH} \
+  LC_CTYPE=en_US.UTF-8 xvfb-run -s "-screen 0 1920x1080x16 -ac +extension GLX" -a -n "$servernum" \
+    "${srcdir}/Python-${pkgver}/python" -m test.regrtest -j "$_jobs" -v -uall \
+      -x test_tk -x test_ttk -x test_tkinter -x test_pyexpat -x test_socket -x test_unittest -x test_ssl
+}
+
+package_python() {
+  # === Updated optdepends — uv is now the official recommendation ===
+  optdepends=(
+    'uv: extremely fast, secure, modern Python package & project manager (recommended replacement for pip/pipx/poetry/pyenv)'
+    'python-setuptools: legacy build system for rare packages (uv handles most cases automatically)'
+    'sqlite: for a default database integration'
+    'xz: for lzma'
+    'tk: for tkinter'
+  )
+
+  provides=('python3' 'python-externally-managed')
+  replaces=('python3' 'python-externally-managed')
+
+  cd Python-${pkgver}
+
+  # Avoid rebuild
+  sed -i 's/^all:.*$/all: build_all/' Makefile
+
+  CFLAGS="${CFLAGS/-O2/-O3}"
+  make DESTDIR="${pkgdir}" EXTRA_CFLAGS="$CFLAGS" install
+
+  # Symlinks
+  ln -s python3               "${pkgdir}"/usr/bin/python
+  ln -s python3-config        "${pkgdir}"/usr/bin/python-config
+  ln -s idle3                 "${pkgdir}"/usr/bin/idle
+  ln -s pydoc3                "${pkgdir}"/usr/bin/pydoc
+  ln -s python${_pybasever}.1 "${pkgdir}"/usr/share/man/man1/python.1
+
+  # Useful Tools
+  install -dm755 "${pkgdir}"/usr/lib/python${_pybasever}/Tools/{i18n,scripts}
+  install -m755 Tools/i18n/{msgfmt,pygettext}.py "${pkgdir}"/usr/lib/python${_pybasever}/Tools/i18n/
+  install -m755 Tools/scripts/{README,*py} "${pkgdir}"/usr/lib/python${_pybasever}/Tools/scripts/
+
+  # PEP 668 enforcement (blocks unsafe pip)
+  install -Dm644 "$srcdir"/EXTERNALLY-MANAGED -t "${pkgdir}/usr/lib/python${_pybasever}/"
+
+  # Split tests
+  cd "$pkgdir"/usr/lib/python*/
+  rm -r {test,idlelib/idle_test}
+}
+
+package_python-tests() {
+  pkgdesc="Regression tests packages for Python"
+  depends=('python')
+
+  cd Python-${pkgver}
+  make DESTDIR="${pkgdir}" EXTRA_CFLAGS="$CFLAGS" libinstall
+  cd "$pkgdir"/usr/lib/python*/
+  rm -r !(test)
+}

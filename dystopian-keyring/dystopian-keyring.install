@@ -1,2 +1,14 @@
-post_install()   { pacman-key --populate dystopian; }
-post_upgrade()   { pacman-key --populate dystopian; }
+post_install() {
+  echo "==> Adding Dystopian Linux keyring..."
+  pacman-key --add /usr/share/pacman/keyrings/dystopian.gpg
+  pacman-key --lsign-key "$(gpg --list-keys --with-subkey-fingerprint | grep -B1 'Dystopian Linux' | head -n1 | awk '{print $1}')" 2>/dev/null || true
+  pacman-key --populate dystopian
+
+  echo "==> Adding Dystopian Linux keyring to trusted.gpg.d..."
+  install -Dm644 /usr/share/pacman/keyrings/dystopian.gpg /etc/pacman/trusted.gpg.d/dystopian.gpg
+
+}
+
+post_upgrade() {
+  post_install
+}

@@ -1,0 +1,23 @@
+# Hardened system defaults for OpenSSL 3.x (Feb 2026)
+openssl_conf = default_conf
+
+[default_conf]
+ssl_conf = ssl_sect
+providers = provider_sect
+
+[provider_sect]
+default = default_sect
+# legacy = legacy_sect   # comment out or remove for maximum hardening
+
+[default_sect]
+activate = 1
+
+[ssl_sect]
+system_default = system_default_sect
+
+[system_default_sect]
+MinProtocol = TLSv1.2          # or TLSv1.3 for ultra-strict (breaks <1% of sites)
+CipherString = DEFAULT@SECLEVEL=2:!aNULL:!eNULL:!LOW:!3DES:!MD5:!RC4:!EXP:!PSK:!SRP:!DSS:!CAMELLIA
+Ciphersuites = TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256
+Options = ServerPreference,PrioritizeChaCha,NoRenegotiation,NoCompression,NoTicket
+Curves = X25519MLKEM768:X25519:secp384r1:prime256v1   # hybrid PQC + modern curves

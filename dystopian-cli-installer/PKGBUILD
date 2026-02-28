@@ -1,0 +1,52 @@
+# Maintainer: Dystopian <dcxdevelopment at protonmail dot com>
+# Co-Maintainer: DCx7C5 <dcxdevelopment at protonmail dot com>
+
+
+pkgname=dystopian-cli-installer
+_pkgname=Dystopian-CLI-Installer
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='CLI installer for Dystopian'
+arch=('x86_64')
+license=(GPL-3.0-or-later)
+groups=('dystopian')
+url="https://github.com/Dystopian-Project/$_pkgname"
+depends=('fzf' 'gawk' 'dystopian-hwd' 'curl' 'util-linux')
+makedepends=('cmake' 'ninja' 'git')
+source=("$pkgver.tar.gz::$url/archive/$pkgver.tar.gz")
+sha512sums=('83cde0c813e876d263082d4e76ff3caaacd7b933824ab2264b208808ad5ee00babb6c56751705ca8a5753d4c4fd52ae6677a3402b661c6f653eef319e0ae7432')
+b2sums=('SKIP')
+
+
+validpgpkeys=(
+    '14A71FEDA1F764F7075FFA40FF64D67D0F00DD12'
+    'C71C37EA17233736B9FAD43EFAD24DA0784D363A')
+
+
+build() {
+  cd "$srcdir/$_pkgname-$pkgver"
+
+  CFLAGS=${CFLAGS/-Wp,-D_GLIBCXX_ASSERTIONS}
+  CXXFLAGS=${CXXFLAGS/-Wp,-D_GLIBCXX_ASSERTIONS}
+
+  _cpuCount=$(grep -c -w ^processor /proc/cpuinfo)
+
+  cmake -S . -Bbuild \
+        -GNinja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_INSTALL_LIBDIR=lib \
+        -DENABLE_DEVENV=OFF \
+        -DCOS_BUILD_STATIC=ON
+  cmake --build build --parallel $_cpuCount
+}
+
+package() {
+  cd "$srcdir/$_pkgname-$pkgver"
+  DESTDIR="${pkgdir}" cmake --build build --target install
+
+  install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+  install -Dm644 net-profiles.toml "${pkgdir}/var/lib/${pkgname}/net-profiles.toml"
+}
+
+# vim:set sw=2 sts=2 et:

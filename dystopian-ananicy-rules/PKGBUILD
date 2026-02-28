@@ -1,0 +1,37 @@
+# Maintainer: Dystopian <dcxdevelopment at protonmail dot com>
+# Co-Maintainer: DCx7C5 <dcxdevelopment at protonmail dot com>
+
+pkgname=dystopian-ananicy-rules
+_gitname=ananicy-rules
+pkgver=0.1.0
+pkgrel=1
+epoch=1
+pkgdesc='Dystopian - ananicy-rules'
+arch=('any')
+url='https://github.com/Dystopian-Project/ananicy-rules'
+license=(GPL-3.0-or-later)
+makedepends=('curl')
+groups=(dystopian)
+source=("${_gitname}::git+$url.git#tag=${pkgver}")
+sha512sums=('SKIP')
+b2sums=('SKIP')
+validpgpkeys=(
+    '14A71FEDA1F764F7075FFA40FF64D67D0F00DD12'
+    'C71C37EA17233736B9FAD43EFAD24DA0784D363A')
+
+replaces=(ananicy-rules-git)
+provides=(ananicy-rules-git)
+conflicts=(ananicy-rules-git)
+
+prepare() {
+  cd "${_gitname}"
+  rm -f README.md
+}
+
+package() {
+  cd "${_gitname}"
+  install -d $pkgdir/etc/ananicy.d
+  cp -rf $srcdir/$_gitname/* $pkgdir/etc/ananicy.d
+}
+
+# vim:set sw=2 sts=2 et:

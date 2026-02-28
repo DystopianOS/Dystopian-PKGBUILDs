@@ -36,7 +36,7 @@
 # This PKGBUILD read the database kept if it exists
 #
 # More at this wiki page ---> https://wiki.archlinux.org/index.php/Modprobed-db
-: "${_localmodcfg:=no}"
+: "${_localmodcfg:=yes}"
 
 # Path to the list of used modules
 : "${_localmodcfg_path:="$HOME/.config/modprobed.db"}"
@@ -93,7 +93,7 @@
 # yes - enable -lto suffix
 # no - disable -lto suffix
 # https://github.com/CachyOS/linux-cachyos/issues/36
-: "${_use_lto_suffix:=no}"
+: "${_use_lto_suffix:=yes}"
 
 # Use suffix -gcc when requested by the user
 # Enabled by default to show the difference between LTO kernels and GCC kernels
@@ -182,7 +182,7 @@ _kernuname="${pkgver}-${_pkgsuffix}"
 arch=('x86_64')
 url="https://github.com/CachyOS/linux-cachyos"
 license=('GPL-2.0-only')
-options=('!strip' '!debug' '!lto')
+options=('strip' '!debug' 'lto')
 makedepends=(
   bc
   cpio
@@ -768,6 +768,6 @@ for _p in "${pkgname[@]}"; do
 done
 
 b2sums=('d1551c058e9a1201a0fa769b427255f13bb0d73fdd384e2c0302956cc9a1eeba255b013fa87a15fdad508bc00fdae2085590572c76cfe20fe2af31ba87b7d289'
-        '3c42413a19aa5c51d25c1dd414d21a2cd9fe9dbc904ad8679927a8dd1c733e0d62e2f74290c02faae3f04eac70a4e3caff0870b65c44647f3f523ee8d187b18f'
-        'e9b4af27934459052ee06ecda0eff9c960d2878431a24a50199973449211febdd2b1e4518114a69f00f7505b9a6d8de28fb5772d35d9db9ea4ffda4e60304cdc'
+        '05c3d5e4bbd1fb2c7248660a08248c18346f313d0489414b527c4d14e0238ad992a9da27f96a0f53fb422b1a19f71865046e77b07548ae138b6a479019af359f'
+        'd2ff199e5bbc87379f44738058ffa16290077f89bf5d4f5a91e6b4df9b88fdeeae7492e15fd0bec1356a3d5280384fb872f1a637070eb6e49a3bca57658667b3'
         'ea26c88950fc06b6ffab93b30e3beacc7d26571a70262334ca8b001dc7899bf96b47d703fbaa7f4e47765c3dafccc23c58a4d4da2169b8ee50012afcb7a1dd96')

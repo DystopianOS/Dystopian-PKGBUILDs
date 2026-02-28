@@ -1,0 +1,14 @@
+post_install() {
+  echo "==> Adding DCx7C5 keyring..."
+  pacman-key --add /usr/share/pacman/keyrings/dcx7c5.gpg
+  pacman-key --lsign-key "$(gpg --list-keys --with-subkey-fingerprint | grep -B1 'DCx7C5 Linux' | head -n1 | awk '{print $1}')" 2>/dev/null || true
+  pacman-key --populate dcx7c5
+
+  echo "==> Adding Dystopian Linux keyring to trusted.gpg.d..."
+  install -Dm644 /usr/share/pacman/keyrings/dcx7c5.gpg /etc/pacman/trusted.gpg.d/dcx7c5.gpg
+
+}
+
+post_upgrade() {
+  post_install
+}

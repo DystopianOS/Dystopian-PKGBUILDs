@@ -1,0 +1,21 @@
+post_install() {
+  if ! command -v log_success >/dev/null 2>&1; then
+    echo "Error: Dystopian shell libraries not found. Please install dystopian-libs package." >&2
+    exit 1
+  fi
+
+  cat << 'EOF'
+==> Dystopian shell libraries installed to /usr/lib/dystopian/
+
+To use in your scripts:
+
+    #!/usr/bin/env sh
+    . /usr/lib/dystopian/libvariables.sh
+    . /usr/lib/dystopian/libapplog.sh
+    . /usr/lib/dystopian/libhelper.sh
+
+    log_info "Starting dystopian tool..."
+EOF
+}
+
+post_upgrade() { post_install; }

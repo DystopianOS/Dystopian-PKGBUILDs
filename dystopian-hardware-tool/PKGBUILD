@@ -1,0 +1,31 @@
+# Maintainer: Dystopian <dcxdevelopment at protonmail dot com>
+# Co-Maintainer: DCx7C5 <dcxdevelopment at protonmail dot com>
+
+pkgname=dystopian-hardware-tool
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Hardware information gathering and reporting tool for Dystopian'
+arch=('any')
+license=(GPL-3.0-or-later)
+url="https://github.com/Dystopian-Project/${pkgname}"
+groups=('dystopian')
+source=("git+https://github.com/Dystopian-Project/${pkgname}#tag=$pkgver")
+makedepends=('git')
+depends=('bash' 'lshw' 'lsblk' 'lspci' 'lsusb' 'hwinfo' 'inxi' 'dmidecode' 'smartmontools' 'nvme-cli' 'lsb-release' 'coreutils')
+provides=('dystopian-hardware-tool')
+conflicts=('dystopian-hardware-tool')
+
+sha512sums=('SKIP')
+b2sums=('SKIP')
+
+validpgpkeys=(
+  '14A71FEDA1F764F7075FFA40FF64D67D0F00DD12'
+  'C71C37EA17233736b9fad43efad24da0784d363a'
+)
+
+package() {
+  cd "$pkgname"
+
+  install -Dm755 dystopian-hardware-tool "$pkgdir/usr/bin/dystopian-hardware-tool"
+
+}

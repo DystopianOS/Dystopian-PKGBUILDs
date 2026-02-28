@@ -1,0 +1,23 @@
+pkgbase = dystopian-secboot
+	pkgdesc = Secure Boot utilities and enrollment helpers
+	pkgver = 0.1.0
+	pkgrel = 1
+	url = https://github.com/Dystopian-Project/dystopian-secboot
+	install = dystopian-secboot.install
+	arch = x86_64
+	license = MIT
+	depends = python
+	depends = mokutil
+	depends = dystopian-libs
+	depends = dystopian-crypto
+	optdepends = grub: Grub bootloader support
+	optdepends = dracut: dracut initramfs generator support
+	provides = dystopian-secboot
+	conflicts = dystopian-secboot
+	source = dystopian-secboot
+	validpgpkeys = 14A71FEDA1F764F7075FFA40FF64D67D0F00DD12
+	validpgpkeys = c71c37ea17233736b9fad43efad24da0784d363a
+	sha512sums = 287aab85edbc28f06d4209cae9087e42b43a19655b81ab0189740ffbd2c1788772a12929e1ff4759b4a456b44a8d7f4481595d6238e26a9748ce38600fa353d1
+	b2sums = 6b1460f5f8de039a2ee2a84d395d71e5545b799de56b7f15683750b7e9e237334a247cf52d5ecf16de217bb3173e51aab22e21a4df1e6e590a6adae58739db0d
+
+pkgname = dystopian-secboot

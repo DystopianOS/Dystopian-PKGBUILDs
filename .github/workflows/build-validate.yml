@@ -19,11 +19,15 @@ jobs:
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
+      # 1. Install git FIRST (no checkout yet)
+      - name: Install git in container
+        run: |
+          pacman -Syu --noconfirm --needed git
+
+      # 2. Now checkout works with submodules
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          submodules: recursive
-
       - id: set-matrix
         run: |
           dirs=$(find . -maxdepth 2 -type f -name PKGBUILD -not -path '*/\.*' -printf '%h\n' | sed 's|^\./||' | sort -u | jq -R . | jq -s '{ pkgdir: . }')
@@ -41,9 +45,12 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.discover.outputs.matrix) }}
     steps:
+      - name: Install git in container
+        run: pacman -Syu --noconfirm --needed git
+
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
+          fetch-depth: 0   # keep this if you need history/diff
 
       - name: Install dependencies
         run: |

@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: archlinux:base
-      options: --user 1000:1000
+      options: --user root
 
     steps:
       - uses: actions/checkout@v4

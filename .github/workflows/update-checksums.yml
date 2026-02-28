@@ -25,8 +25,12 @@ jobs:
       - name: Update checksums where needed
         run: |
           set -euo pipefail
-          changed_dirs=$(git diff --name-only ${{ github.event.before || 'HEAD^' }} ${{ github.sha }} | grep -E '/PKGBUILD$' | xargs -r dirname | sort -u)
-
+          if git rev-parse HEAD^ >/dev/null 2>&1; then
+            base=${{ github.event.before || 'HEAD^' }}
+          else
+            base=${{ github.sha }}
+          fi
+          changed_dirs=$(git diff --name-only "$base" ${{ github.sha }} | grep -E '/PKGBUILD$' | xargs -r dirname | sort -u)
           [[ -z "$changed_dirs" ]] && exit 0
 
           for dir in $changed_dirs; do

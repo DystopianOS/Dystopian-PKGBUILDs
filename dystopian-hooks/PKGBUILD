@@ -8,9 +8,9 @@ pkgrel=1
 pkgdesc="A package for Dystopian ALPM Hooks"
 arch=('any')
 license=('GPL-3.0-or-later')
-url="https://github.com/Dystopian-Project/${pkgname}"
+url="https://github.com/DystopianOS/${pkgname}"
 groups=('dystopian')
-source=("git+https://github.com/Dystopian-Project/dystopian-hooks#tag=$pkgver")
+source=("git+https://github.com/DystopianOS/dystopian-hooks#tag=$pkgver")
 makedepends=('git')
 depends=('systemd')
 provides=('dystopian-hooks')

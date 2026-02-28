@@ -9,7 +9,7 @@ pkgrel=1
 pkgdesc="GPG keys for Dystopian repositories"
 arch=('any')
 license=('GPL-3.0-or-later')
-url="https://github.com/Dystopian-Project/dystopian-PKGBUILDS"
+url="https://github.com/DystopianOS/dystopian-PKGBUILDS"
 
 install=$pkgname.install
 

@@ -14,7 +14,7 @@ groups=('dystopian' 'dystopian-settings')
 arch=('any')
 license=('GPL-3.0-or-later')
 makedepends=('coreutils' 'git')
-url="https://github.com/Dystopian-Project/$_gitname"
+url="https://github.com/DystopianOS/$_gitname"
 source=("git+$url.git?signed#tag=$pkgver")
 install="$pkgname.install"
 sha512sums=('SKIP')

@@ -15,7 +15,7 @@ permissions:
 jobs:
   discover:
     runs-on: ubuntu-latest
-    container: archlinux:base-devel-latest
+    container: archlinux:base-devel
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:

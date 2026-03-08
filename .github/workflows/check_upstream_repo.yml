@@ -22,13 +22,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Get Upstream Repository URL
-        id: get_upstream_url
-        uses: DCx7C5/actions/json-packages@v1
-        with:
-          action: 'get'
-          package_name: ${{ inputs.pkgrepo }}
-
       - id: test
         shell: bash
         run: |

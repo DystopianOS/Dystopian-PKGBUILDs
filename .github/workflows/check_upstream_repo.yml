@@ -33,7 +33,6 @@ jobs:
         uses: DCx7C5/actions/git-fetch@v1
         with:
           remote: upstream
-          ref: main
           prune: true
 
       - name: Check for new, changed and removed PKGBUILD directories

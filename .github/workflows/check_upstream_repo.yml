@@ -21,21 +21,19 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          path: ${{ inputs.pkgrepo }}
 
       - name: Get Upstream Repository URL
         id: get_upstream_url
+        uses: DCx7C5/actions/json-packages@v1
+        with:
+          action: 'get'
+          package_name: ${{ inputs.pkgrepo }}
+
+      - id: test
         shell: bash
-        env:
-          PKGREPO: ${{ inputs.pkgrepo }}
         run: |
           set -euo pipefail
-          echo "remote_url=$(jq -r --arg pkg "$PKGREPO" '.[$pkg].upstream // empty' .github/packages.json)" >> "$GITHUB_OUTPUT"
-          echo "::notice:: Upstream URL for package '$PKGREPO': ${{ steps.get_upstream_url.outputs.remote_url }}"
-
-      - name: Add upstream remote
-        id: add_upstream
-        uses: DCx7C5/actions/git-add-upstream@v1
-        with:
-          remote_url: "${{ steps.get_upstream_url.outputs.remote_url }}"
-
+          
+          echo "::error::${{ steps.get_upstream_url.outputs.upstream }}"
+          echo "::error::${{ steps.get_upstream_url.outputs.custom }}"
+          echo "::error::$(ls -als)"

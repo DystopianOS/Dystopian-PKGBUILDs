@@ -13,7 +13,6 @@ on:
         required: true
         type: string
 
-
 jobs:
   check-upstream:
     runs-on: ubuntu-latest

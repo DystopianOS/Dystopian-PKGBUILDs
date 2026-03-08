@@ -17,16 +17,39 @@ jobs:
   check-upstream:
     runs-on: ubuntu-latest
     steps:
+      - id: testa
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::error::$(ls -als)" >&2
+
       - name: Checkout PKGBUILDs repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - id: test
+
+      - id: testb
         shell: bash
         run: |
           set -euo pipefail
           
-          echo "::error::${{ steps.get_upstream_url.outputs.upstream }}"
-          echo "::error::${{ steps.get_upstream_url.outputs.custom }}"
-          echo "::error::$(ls -als)"
+          echo "::error::${{ steps.get_upstream_url.outputs.upstream }}" >&2
+          echo "::error::${{ steps.get_upstream_url.outputs.custom }}" >&2
+          echo "::error::$(ls -als)" >&2
+
+      - name: Checkout PKGBUILDs repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: testc
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "::error::${{ steps.get_upstream_url.outputs.upstream }}" >&2
+          echo "::error::${{ steps.get_upstream_url.outputs.custom }}" >&2
+          echo "::error::$(ls -als)" >&2
+
+

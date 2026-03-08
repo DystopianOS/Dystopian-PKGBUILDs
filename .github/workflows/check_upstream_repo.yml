@@ -33,28 +33,31 @@ jobs:
         uses: DCx7C5/actions/git-fetch@v1
         with:
           remote: upstream
+          ref: master
           prune: true
 
       - name: Check for new, changed and removed PKGBUILD directories
         id: check_pkgbuilds
+        env:
+          REF: "master"
         run: |
 
           # Find new directories with PKGBUILD
-          NEW_DIRS=$(git diff --name-only HEAD upstream/main | grep '^[^/]*/PKGBUILD$' | cut -d'/' -f1 | sort -u | while read dir; do
+          NEW_DIRS=$(git diff --name-only HEAD upstream/$REF | grep '^[^/]*/PKGBUILD$' | cut -d'/' -f1 | sort -u | while read dir; do
             if [ ! -d "$dir" ] || ! git ls-tree HEAD "$dir" >/dev/null 2>&1; then
               echo "$dir"
             fi
           done)
 
           # Find changed directories with PKGBUILD
-          CHANGED_DIRS=$(git diff --name-only HEAD upstream/main | grep '^[^/]*/PKGBUILD$' | cut -d'/' -f1 | sort -u | while read dir; do
+          CHANGED_DIRS=$(git diff --name-only HEAD upstream/$REF | grep '^[^/]*/PKGBUILD$' | cut -d'/' -f1 | sort -u | while read dir; do
             if git ls-tree HEAD "$dir" >/dev/null 2>&1; then
               echo "$dir"
             fi
           done)
 
           # Find removed directories with PKGBUILD
-          REMOVED_DIRS=$(git diff --diff-filter=D --name-only HEAD upstream/main | grep '^[^/]*/PKGBUILD$' | cut -d'/' -f1 | sort -u)
+          REMOVED_DIRS=$(git diff --diff-filter=D --name-only HEAD upstream/$REF | grep '^[^/]*/PKGBUILD$' | cut -d'/' -f1 | sort -u)
 
           # Output results
           echo "new_dirs<<EOF" >> $GITHUB_OUTPUT

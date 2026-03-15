@@ -1,0 +1,44 @@
+name: "Testing things"
+
+
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_input:
+        description: "A test input for the workflow"
+        required: false
+        default: "default value"
+        type: string
+
+jobs:
+  test-job:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print test input
+        run: |
+          echo "The test input is: ${{ inputs.test_input }}"
+
+      - name: Run a simple command
+        run: |
+          echo "Running a simple command..."
+          if command -v gh >/dev/null 2>&1; then
+            echo "gh is available"
+          else
+            echo "gh is not available"
+          fi
+          if gh copilot --help >/dev/null 2>&1; then
+            echo "gh copilot is available"
+          else
+            echo "gh copilot is not available"
+          fi
+          if command -v copilot >/dev/null 2>&1; then
+            echo "copilot is available"
+          else
+            echo "copilot is not available"
+          fi
+          if command -v copilot-cli >/dev/null 2>&1; then
+            echo "copilot-cli is available"
+          else
+            echo "copilot-cli is not available"
+          fi

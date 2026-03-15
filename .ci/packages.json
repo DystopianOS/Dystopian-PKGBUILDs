@@ -191,7 +191,7 @@
     "remote": "CachyOS/CachyOS-PKGBUILDS",
     "remote_type": "PKGBUILDS"
   },
-    "adaptivemm": {
+  "adaptivemm": {
     "remote_dir": "adaptivemm",
     "remote_type": "PKGBUILDS",
     "remote": "CachyOS/CachyOS-PKGBUILDS",

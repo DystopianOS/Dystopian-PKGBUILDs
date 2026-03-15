@@ -1,194 +1,168 @@
 {
   "archlinux-keyring": {
-    "upstream": "https://github.com/CachyOS/CachyOS-PKGBUILDS/tree/master/archlinux-keyring",
+    "dir": "archlinux-keyring",
     "custom": false,
-    "refactor": false
+    "upstream": "CachyOS/CachyOS-PKGBUILDS"
   },
   "autofdo-bin": {
-    "upstream": "https://github.com/CachyOS/CachyOS-PKGBUILDS/tree/master/autofdo-bin",
+    "dir": "autofdo-bin",
     "custom": false,
-    "refactor": false
+    "upstream": "CachyOS/CachyOS-PKGBUILDS"
   },
   "bash": {
-    "upstream": "https://github.com/CachyOS/CachyOS-PKGBUILDS/tree/master/bash",
+    "dir": "bash",
     "custom": false,
-    "refactor": false
+    "upstream": "CachyOS/CachyOS-PKGBUILDS"
   },
   "bpftune-git": {
-    "upstream": "https://github.com/CachyOS/CachyOS-PKGBUILDS/tree/master/bpftune-git",
+    "dir": "bpftune-git",
     "custom": false,
-    "refactor": false
+    "upstream": "CachyOS/CachyOS-PKGBUILDS"
   },
   "clang": {
-    "upstream": "https://github.com/CachyOS/CachyOS-PKGBUILDS/tree/master/clang",
+    "dir": "clang",
     "custom": false,
-    "refactor": false
+    "upstream": "CachyOS/CachyOS-PKGBUILDS"
   },
   "devtools": {
-    "upstream": "https://github.com/CachyOS/CachyOS-PKGBUILDS/tree/master/devtools",
+    "dir": "devtools",
     "custom": false,
-    "refactor": false
+    "upstream": "CachyOS/CachyOS-PKGBUILDS"
   },
   "dkms": {
-    "upstream": "https://github.com/CachyOS/CachyOS-PKGBUILDS/tree/master/dkms",
+    "dir": "dkms",
     "custom": false,
-    "refactor": false
+    "upstream": "CachyOS/CachyOS-PKGBUILDS"
   },
   "dracut-dystopian": {
-    "upstream": "https://github.com/CachyOS/CachyOS-PKGBUILDS/tree/master/dracut-cachyos",
+    "dir": "dracut-cachyos",
     "custom": true,
-    "refactor": true
+    "upstream": "CachyOS/CachyOS-PKGBUILDS"
   },
   "dystopian-ananicy-rules": {
-    "upstream": "https://github.com/CachyOS/CachyOS-PKGBUILDS/tree/master/cachyos-ananicy-rules",
+    "dir": "cachyos-ananicy-rules",
     "custom": true,
-    "refactor": true
+    "upstream": "CachyOS/CachyOS-PKGBUILDS"
   },
   "dystopian-chroot": {
-    "upstream": "https://github.com/CachyOS/CachyOS-PKGBUILDS/tree/master/cachy-chroot",
+    "dir": "cachy-chroot",
     "custom": true,
-    "refactor": true
+    "upstream": "CachyOS/CachyOS-PKGBUILDS"
   },
   "dystopian-cli-installer": {
-    "upstream": "https://github.com/CachyOS/CachyOS-PKGBUILDS/tree/master/cachyos-cli-installer-new",
+    "dir": "cachyos-cli-installer-new",
     "custom": true,
-    "refactor": true
+    "upstream": "CachyOS/CachyOS-PKGBUILDS"
   },
   "dystopian-crypto": {
-    "upstream": "",
-    "custom": true,
-    "refactor": true
+    "custom": true
   },
   "dystopian-full": {
-    "upstream": "",
-    "custom": true,
-    "refactor": false,
-    "type": "meta"
+    "custom": true
   },
   "dystopian-hardware-tool": {
-    "upstream": "",
-    "custom": true,
-    "refactor": false
+    "custom": true
   },
   "dystopian-headless": {
-    "upstream": "",
-    "custom": true,
-    "refactor": false,
-    "type": "meta"
+    "custom": true
   },
   "dystopian-hooks": {
-    "upstream": "https://github.com/CachyOS/CachyOS-PKGBUILDS/tree/master/cachyos-hooks",
+    "dir": "cachyos-hooks",
     "custom": true,
-    "refactor": true
+    "upstream": "CachyOS/CachyOS-PKGBUILDS"
   },
   "dystopian-hwd": {
-    "upstream": "https://github.com/CachyOS/CachyOS-PKGBUILDS/tree/master/chwd",
-    "custom": true,
-    "refactor": true
+    "custom": true
   },
   "dystopian-kde-settings": {
-    "upstream": "https://github.com/CachyOS/CachyOS-PKGBUILDS/tree/master/cachyos-kde-settings",
+    "dir": "cachyos-kde-settings",
     "custom": true,
-    "refactor": true
+    "upstream": "CachyOS/CachyOS-PKGBUILDS"
   },
   "dystopian-keyring": {
-    "upstream": "",
-    "custom": true,
-    "refactor": true
+    "custom": true
   },
   "dystopian-libs": {
-    "upstream": "",
-    "custom": true,
-    "refactor": false
+    "custom": true
   },
   "dystopian-manager": {
-    "upstream": "",
-    "custom": true,
-    "refactor": false
+    "custom": true
   },
   "dystopian-mirrorlist": {
-    "upstream": "https://github.com/CachyOS/CachyOS-PKGBUILDS/tree/master/cachyos-mirrorlist",
+    "dir": "cachyos-mirrorlist",
     "custom": true,
-    "refactor": true
+    "upstream": "CachyOS/CachyOS-PKGBUILDS"
   },
   "dystopian-packageinstaller": {
-    "upstream": "https://github.com/CachyOS/CachyOS-PKGBUILDS/tree/master/cachyos-packageinstaller",
+    "dir": "cachyos-packageinstaller",
     "custom": true,
-    "refactor": true
+    "upstream": "CachyOS/CachyOS-PKGBUILDS"
   },
   "dystopian-secboot": {
-    "upstream": "",
-    "custom": true,
-    "refactor": false
+    "custom": true
   },
   "dystopian-settings": {
-    "upstream": "https://github.com/CachyOS/CachyOS-PKGBUILDS/tree/master/cachyos-settings",
+    "dir": "cachyos-settings",
     "custom": true,
-    "refactor": true
+    "upstream": "CachyOS/CachyOS-PKGBUILDS"
   },
   "dystopian-tpm2-support": {
-    "upstream": "",
-    "custom": true,
-    "refactor": true
+    "custom": true
   },
   "dystopian-update": {
-    "upstream": "https://github.com/CachyOS/CachyOS-PKGBUILDS/tree/master/cachy-update",
+    "dir": "cachy-update",
     "custom": true,
-    "refactor": true
+    "upstream": "CachyOS/CachyOS-PKGBUILDS"
   },
   "dystopian-uv": {
-    "upstream": "",
-    "custom": true,
-    "refactor": true
+    "custom": true
   },
   "go": {
-    "upstream": "https://github.com/CachyOS/CachyOS-PKGBUILDS/tree/master/go",
+    "dir": "go",
     "custom": false,
-    "refactor": false
+    "upstream": "CachyOS/CachyOS-PKGBUILDS"
   },
   "java": {
-    "upstream": "https://github.com/CachyOS/CachyOS-PKGBUILDS/tree/master/java",
+    "dir": "java",
     "custom": false,
-    "refactor": false
+    "upstream": "CachyOS/CachyOS-PKGBUILDS"
   },
   "linux-firmware": {
-    "upstream": "https://github.com/CachyOS/CachyOS-PKGBUILDS/tree/master/linux-firmware",
+    "dir": "linux-firmware",
     "custom": false,
-    "refactor": false
+    "upstream": "CachyOS/CachyOS-PKGBUILDS"
   },
   "llvm": {
-    "upstream": "https://github.com/CachyOS/CachyOS-PKGBUILDS/tree/master/llvm",
+    "dir": "llvm",
     "custom": false,
-    "refactor": false
+    "upstream": "CachyOS/CachyOS-PKGBUILDS"
   },
   "nvidia-module-extractor": {
-    "upstream": "https://github.com/CachyOS/CachyOS-PKGBUILDS/tree/master/nvidia-module-extractor",
+    "dir": "nvidia-module-extractor",
     "custom": false,
-    "refactor": false
+    "upstream": "CachyOS/CachyOS-PKGBUILDS"
   },
   "nvidia": {
-    "upstream": "https://github.com/CachyOS/CachyOS-PKGBUILDS/tree/master/nvidia",
+    "dir": "nvidia",
     "custom": false,
-    "refactor": false
+    "upstream": "CachyOS/CachyOS-PKGBUILDS"
   },
   "paru": {
-    "upstream": "https://github.com/CachyOS/CachyOS-PKGBUILDS/tree/master/paru",
+    "dir": "paru",
     "custom": false,
-    "refactor": false
+    "upstream": "CachyOS/CachyOS-PKGBUILDS"
   },
   "python": {
-    "upstream": "https://github.com/CachyOS/CachyOS-PKGBUILDS/tree/master/python",
+    "dir": "python",
     "custom": false,
-    "refactor": false
+    "upstream": "CachyOS/CachyOS-PKGBUILDS"
   },
   "tiger": {
-    "upstream": "",
-    "custom": true,
-    "refactor": false
+    "custom": true
   },
   "toolchain": {
-    "upstream": "https://github.com/CachyOS/CachyOS-PKGBUILDS/tree/master/toolchain",
+    "dir": "toolchain",
     "custom": false,
-    "refactor": false
+    "upstream": "CachyOS/CachyOS-PKGBUILDS"
   }
 }

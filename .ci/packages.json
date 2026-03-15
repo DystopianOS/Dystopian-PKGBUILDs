@@ -11,6 +11,45 @@
     "remote": "CachyOS/CachyOS-PKGBUILDS",
     "remote_type": "PKGBUILDS"
   },
+  "clang": {
+    "remote_dir": "clang",
+    "custom": false,
+    "remote": "CachyOS/CachyOS-PKGBUILDS",
+    "remote_type": "PKGBUILDS"
+  },
+  "paru": {
+    "remote_dir": "paru",
+    "custom": false,
+    "remote": "CachyOS/CachyOS-PKGBUILDS",
+    "remote_type": "PKGBUILDS"
+  },
+  "python": {
+    "remote_dir": "python",
+    "custom": false,
+    "remote": "CachyOS/CachyOS-PKGBUILDS",
+    "remote_type": "PKGBUILDS"
+  },
+  "tiger": {
+    "custom": true
+  },
+  "adaptivemm": {
+    "remote_dir": "adaptivemm",
+    "remote_type": "PKGBUILDS",
+    "remote": "CachyOS/CachyOS-PKGBUILDS",
+    "custom": false
+  },
+  "adiosctl": {
+    "remote_dir": "adiosctl",
+    "remote_type": "PKGBUILDS",
+    "remote": "CachyOS/CachyOS-PKGBUILDS",
+    "custom": false
+  },
+  "aura": {
+    "remote_dir": "aura",
+    "remote_type": "PKGBUILDS",
+    "remote": "CachyOS/CachyOS-PKGBUILDS",
+    "custom": false
+  },
   "bash": {
     "remote_dir": "bash",
     "custom": false,
@@ -23,13 +62,19 @@
     "remote": "CachyOS/CachyOS-PKGBUILDS",
     "remote_type": "PKGBUILDS"
   },
-  "clang": {
-    "remote_dir": "clang",
-    "custom": false,
+  "char-white": {
+    "remote_dir": "char-white",
+    "remote_type": "PKGBUILDS",
     "remote": "CachyOS/CachyOS-PKGBUILDS",
-    "remote_type": "PKGBUILDS"
+    "custom": false
   },
-  "devtools": {
+  "davinci-resolve": {
+    "remote_dir": "davinci-resolve",
+    "remote_type": "PKGBUILDS",
+    "remote": "CachyOS/CachyOS-PKGBUILDS",
+    "custom": false
+  },
+    "devtools": {
     "remote_dir": "devtools",
     "custom": false,
     "remote": "CachyOS/CachyOS-PKGBUILDS",
@@ -134,98 +179,17 @@
   "dystopian-uv": {
     "custom": true
   },
-  "go": {
-    "remote_dir": "go",
-    "custom": false,
-    "remote": "CachyOS/CachyOS-PKGBUILDS",
-    "remote_type": "PKGBUILDS"
-  },
-  "java": {
-    "remote_dir": "java",
-    "custom": false,
-    "remote": "CachyOS/CachyOS-PKGBUILDS",
-    "remote_type": "PKGBUILDS"
-  },
-  "linux-firmware": {
-    "remote_dir": "linux-firmware",
-    "custom": false,
-    "remote": "CachyOS/CachyOS-PKGBUILDS",
-    "remote_type": "PKGBUILDS"
-  },
-  "llvm": {
-    "remote_dir": "llvm",
-    "custom": false,
-    "remote": "CachyOS/CachyOS-PKGBUILDS",
-    "remote_type": "PKGBUILDS"
-  },
-  "nvidia-module-extractor": {
-    "remote_dir": "nvidia-module-extractor",
-    "custom": false,
-    "remote": "CachyOS/CachyOS-PKGBUILDS",
-    "remote_type": "PKGBUILDS"
-  },
-  "nvidia": {
-    "remote_dir": "nvidia",
-    "custom": false,
-    "remote": "CachyOS/CachyOS-PKGBUILDS",
-    "remote_type": "PKGBUILDS"
-  },
-  "paru": {
-    "remote_dir": "paru",
-    "custom": false,
-    "remote": "CachyOS/CachyOS-PKGBUILDS",
-    "remote_type": "PKGBUILDS"
-  },
-  "python": {
-    "remote_dir": "python",
-    "custom": false,
-    "remote": "CachyOS/CachyOS-PKGBUILDS",
-    "remote_type": "PKGBUILDS"
-  },
-  "tiger": {
-    "custom": true
-  },
-  "toolchain": {
-    "remote_dir": "toolchain",
-    "custom": false,
-    "remote": "CachyOS/CachyOS-PKGBUILDS",
-    "remote_type": "PKGBUILDS"
-  },
-  "adaptivemm": {
-    "remote_dir": "adaptivemm",
-    "remote_type": "PKGBUILDS",
-    "remote": "CachyOS/CachyOS-PKGBUILDS",
-    "custom": false
-  },
-  "adiosctl": {
-    "remote_dir": "adiosctl",
-    "remote_type": "PKGBUILDS",
-    "remote": "CachyOS/CachyOS-PKGBUILDS",
-    "custom": false
-  },
-  "aura": {
-    "remote_dir": "aura",
-    "remote_type": "PKGBUILDS",
-    "remote": "CachyOS/CachyOS-PKGBUILDS",
-    "custom": false
-  },
-  "char-white": {
-    "remote_dir": "char-white",
-    "remote_type": "PKGBUILDS",
-    "remote": "CachyOS/CachyOS-PKGBUILDS",
-    "custom": false
-  },
-  "davinci-resolve": {
-    "remote_dir": "davinci-resolve",
-    "remote_type": "PKGBUILDS",
-    "remote": "CachyOS/CachyOS-PKGBUILDS",
-    "custom": false
-  },
   "falcond": {
     "remote_dir": "falcond",
     "remote_type": "PKGBUILDS",
     "remote": "CachyOS/CachyOS-PKGBUILDS",
     "custom": false
+  },
+    "go": {
+    "remote_dir": "go",
+    "custom": false,
+    "remote": "CachyOS/CachyOS-PKGBUILDS",
+    "remote_type": "PKGBUILDS"
   },
   "grub-btrfs-support": {
     "remote_dir": "grub-btrfs-support",
@@ -299,6 +263,12 @@
     "remote": "CachyOS/CachyOS-PKGBUILDS",
     "custom": false
   },
+  "java": {
+    "remote_dir": "java",
+    "custom": false,
+    "remote": "CachyOS/CachyOS-PKGBUILDS",
+    "remote_type": "PKGBUILDS"
+  },
   "java/java17-openjdk": {
     "remote_dir": "java/java17-openjdk",
     "remote_type": "PKGBUILDS",
@@ -358,6 +328,18 @@
     "remote_type": "PKGBUILDS",
     "remote": "CachyOS/CachyOS-PKGBUILDS",
     "custom": false
+  },
+  "linux-firmware": {
+    "remote_dir": "linux-firmware",
+    "custom": false,
+    "remote": "CachyOS/CachyOS-PKGBUILDS",
+    "remote_type": "PKGBUILDS"
+  },
+  "llvm": {
+    "remote_dir": "llvm",
+    "custom": false,
+    "remote": "CachyOS/CachyOS-PKGBUILDS",
+    "remote_type": "PKGBUILDS"
   },
   "llvm-git/lib32-llvm-git": {
     "remote_dir": "llvm-git/lib32-llvm-git",
@@ -454,6 +436,18 @@
     "remote_type": "PKGBUILDS",
     "remote": "CachyOS/CachyOS-PKGBUILDS",
     "custom": false
+  },
+  "nvidia-module-extractor": {
+    "remote_dir": "nvidia-module-extractor",
+    "custom": false,
+    "remote": "CachyOS/CachyOS-PKGBUILDS",
+    "remote_type": "PKGBUILDS"
+  },
+  "nvidia": {
+    "remote_dir": "nvidia",
+    "custom": false,
+    "remote": "CachyOS/CachyOS-PKGBUILDS",
+    "remote_type": "PKGBUILDS"
   },
   "nvidia/lib32-nvidia-utils": {
     "remote_dir": "nvidia/lib32-nvidia-utils",
@@ -706,6 +700,12 @@
     "remote_type": "PKGBUILDS",
     "remote": "CachyOS/CachyOS-PKGBUILDS",
     "custom": false
+  },
+  "toolchain": {
+    "remote_dir": "toolchain",
+    "custom": false,
+    "remote": "CachyOS/CachyOS-PKGBUILDS",
+    "remote_type": "PKGBUILDS"
   },
   "toolchain/binutils": {
     "remote_dir": "toolchain/binutils",

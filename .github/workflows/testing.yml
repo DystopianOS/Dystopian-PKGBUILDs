@@ -44,7 +44,7 @@ jobs:
           fi
 
       - name: Check SSLencryption
-        uses: ./ssl-encrypt
+        uses: DCx7C5/actions/ssl-encrypt@v1
         with:
           in: "Hello, World!"
           passphrase: "pass"

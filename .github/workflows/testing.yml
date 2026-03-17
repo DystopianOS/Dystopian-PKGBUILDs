@@ -83,7 +83,7 @@ jobs:
         run: |
           echo "${{ steps.ssl_decrypt.outputs.decrypted_content }}" > test.txt
           test=$(cat test.txt)
-          echo "::notice::Decrypted content: ${test}!!!"
+          echo "::notice::Decrypted content: ${test:0:-1}r"
 
       - name: Unique test input
         run: |
@@ -117,5 +117,5 @@ jobs:
         run: |
           echo "${{ steps.ssl_decrypt_unique.outputs.decrypted_content }}" > test_unique.txt
           test_unique=$(cat test_unique.txt)
-          echo "::notice::Decrypted unique content: $(echo -n "${test_unique:0:-1}")"
+          echo "::notice::Decrypted unique content: $(echo -n "${test_unique:0:-1}r")"
 

@@ -117,5 +117,5 @@ jobs:
         run: |
           echo "${{ steps.ssl_decrypt_unique.outputs.decrypted_content }}" > test_unique.txt
           test_unique=$(cat test_unique.txt)
-          echo "::notice::Decrypted unique content: ${test_unique}!!!"
-          echo "::notice::Decrypted unique content (base64): $(echo -n "${test_unique}" | base64)"
+          echo "::notice::Decrypted unique content: $(echo -n "${test_unique}" | base64 -d)"
+

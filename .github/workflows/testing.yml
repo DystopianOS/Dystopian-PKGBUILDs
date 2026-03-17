@@ -45,12 +45,14 @@ jobs:
 
       - name: Check SSLencryption
         id: ssl_encrypt
-        uses: DCx7C5/actions/ssl-encrypt@v1
+        uses: ./ssl-encrypt@v1
         with:
-          in: "Hello, World!"
+          input: "Hello, World!"
+          input_encoding: 'binary'
+          input_type: 'inline'
+          output_encoding: 'base64'
           passphrase: "pass"
-          cleanup: false
-          encoding: 'binary'
+          cleanup: 'false'
 
       - name: Check
         shell: bash
@@ -69,12 +71,14 @@ jobs:
 
       - name: Check Decryption
         id: ssl_decrypt
-        uses: DCx7C5/actions/ssl-decrypt@v1
+        uses: ./ssl-decrypt@v1
         with:
           enc_input: ${{ steps.ssl_encrypt.outputs.encrypted_content }}
+          input_encoding: 'base64'
+          input_type: 'inline'
           passphrase: "pass"
-          type: "inline"
-          encoding: "binary"
+          output_encoding: 'raw'
+
 
       - name: Print decrypted content
         shell: bash

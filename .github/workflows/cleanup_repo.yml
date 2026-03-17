@@ -46,5 +46,5 @@ jobs:
         with:
           action: 'delete'
           workflow_status: 'success'
-          keep: '25'
+          keep: '100'
           github_token: ${{ steps.app_token.outputs.token }}

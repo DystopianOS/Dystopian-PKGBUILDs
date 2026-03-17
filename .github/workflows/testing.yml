@@ -72,7 +72,7 @@ jobs:
           enc_input: ${{ steps.ssl_encrypt.outputs.encrypted_content }}
           passphrase: "pass"
           type: "inline"
-          encoding: "base64"
+          encoding: "binary"
 
       - name: Print decrypted content
         shell: bash

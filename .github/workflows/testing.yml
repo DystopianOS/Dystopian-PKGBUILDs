@@ -47,11 +47,11 @@ jobs:
         id: ssl_encrypt
         uses: DCx7C5/actions/ssl-encrypt@v1
         with:
-          input: "Hello, World!"
-          input_encoding: 'binary'
+          input: '${{ inputs.test_input }}'
+          input_encoding: 'raw'
           input_type: 'inline'
           output_encoding: 'base64'
-          passphrase: "pass"
+          passphrase: 'pass'
           cleanup: 'false'
 
       - name: Check
@@ -75,10 +75,11 @@ jobs:
           enc_input: ${{ steps.ssl_encrypt.outputs.encrypted_content }}
           input_encoding: 'base64'
           input_type: 'inline'
-          passphrase: "pass"
+          passphrase: 'pass'
           output_encoding: 'raw'
 
       - name: Print decrypted content
         shell: bash
         run: |
-          echo "::notice::Decrypted content: ${{ steps.ssl_decrypt.outputs.decrypted_content }}"
+          echo "${{ steps.ssl_decrypt.outputs.decrypted_content }}" > test.txt
+          cat test.txt

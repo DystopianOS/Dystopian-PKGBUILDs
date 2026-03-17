@@ -50,6 +50,7 @@ jobs:
           in: "Hello, World!"
           passphrase: "pass"
           cleanup: false
+          encoding: 'binary'
 
       - name: Check
         shell: bash

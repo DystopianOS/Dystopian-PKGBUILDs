@@ -45,7 +45,7 @@ jobs:
 
       - name: Check SSLencryption
         id: ssl_encrypt
-        uses: ./ssl-encrypt@v1
+        uses: DCx7C5/actions/ssl-encrypt@v1
         with:
           input: "Hello, World!"
           input_encoding: 'binary'
@@ -68,17 +68,15 @@ jobs:
             exit 1
           }
 
-
       - name: Check Decryption
         id: ssl_decrypt
-        uses: ./ssl-decrypt@v1
+        uses: DCx7C5/actions/ssl-decrypt@v1
         with:
           enc_input: ${{ steps.ssl_encrypt.outputs.encrypted_content }}
           input_encoding: 'base64'
           input_type: 'inline'
           passphrase: "pass"
           output_encoding: 'raw'
-
 
       - name: Print decrypted content
         shell: bash

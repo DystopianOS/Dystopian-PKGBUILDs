@@ -44,22 +44,37 @@ jobs:
           fi
 
       - name: Check SSLencryption
+        id: ssl_encrypt
         uses: DCx7C5/actions/ssl-encrypt@v1
         with:
           in: "Hello, World!"
           passphrase: "pass"
           cleanup: false
 
-      - name: Check Decryption
+      - name: Check
         shell: bash
         run: |
-          echo "::notice::${{ steps.ssl-encrypt.outputs.encrypted_content }}"
-          echo "::notice::${{ steps.ssl-encrypt.outputs.type }}"
-          echo "::notice::${{ steps.ssl-encrypt.outputs.encoding }}"
-          echo "::notice::${{ steps.ssl-encrypt.outputs.encrypted_content }}"
+          echo "::notice::${{ steps.ssl_encrypt.outputs.encrypted_content }}"
+          echo "::notice::${{ steps.ssl_encrypt.outputs.type }}"
+          echo "::notice::${{ steps.ssl_encrypt.outputs.encoding }}"
+          echo "::notice::${{ steps.ssl_encrypt.outputs.encrypted_content }}"
           
           echo "::notice::Decrypting content..."
-          echo "${{ steps.ssl-encrypt.outputs.encrypted_content }}" | base64 -d | openssl enc -aes-256-cbc -d -pass pass:pass -pbkdf2 || {
+          echo "${{ steps.ssl_encrypt.outputs.encrypted_content }}" | base64 -d | openssl enc -aes-256-cbc -d -pass pass:pass -pbkdf2 || {
             echo "::error::Decryption failed" >&2
             exit 1
           }
+
+      - name: Check Decryption
+        id: ssl_decrypt
+        uses: DCx7C5/actions/ssl-decrypt@v1
+        with:
+          enc_input: ${{ steps.ssl_encrypt.outputs.encrypted_content }}
+          passphrase: "pass"
+          type: "inline"
+          encoding: "base64"
+
+      - name: Print decrypted content
+        shell: bash
+        run: |
+          echo "::notice::Decrypted content: ${{ steps.ssl_decrypt.outputs.decrypted_content }}"

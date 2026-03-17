@@ -84,3 +84,38 @@ jobs:
           echo "${{ steps.ssl_decrypt.outputs.decrypted_content }}" > test.txt
           test=$(cat test.txt)
           echo "::notice::Decrypted content: ${test}!!!"
+
+      - name: Unique test input
+        run: |
+          unique_value="test-$(date +%s%N)-foobar"
+          echo "::notice::Unique test input: $unique_value"
+          echo "unique_value=$unique_value" >> $GITHUB_ENV
+
+      - name: Encrypt unique value
+        id: ssl_encrypt_unique
+        uses: DCx7C5/actions/ssl-encrypt@v1
+        with:
+          input: ${{ env.unique_value }}
+          input_encoding: 'raw'
+          input_type: 'inline'
+          output_encoding: 'base64'
+          passphrase: 'pass'
+          cleanup: 'false'
+
+      - name: Decrypt unique value
+        id: ssl_decrypt_unique
+        uses: DCx7C5/actions/ssl-decrypt@v1
+        with:
+          enc_input: ${{ steps.ssl_encrypt_unique.outputs.encrypted_content }}
+          input_encoding: 'base64'
+          input_type: 'inline'
+          passphrase: 'pass'
+          output_encoding: 'raw'
+
+      - name: Print decrypted unique value
+        shell: bash
+        run: |
+          echo "${{ steps.ssl_decrypt_unique.outputs.decrypted_content }}" > test_unique.txt
+          test_unique=$(cat test_unique.txt)
+          echo "::notice::Decrypted unique content: ${test_unique}!!!"
+          echo "::notice::Decrypted unique content (base64): $(echo -n "${test_unique}" | base64)"

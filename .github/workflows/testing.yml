@@ -82,4 +82,5 @@ jobs:
         shell: bash
         run: |
           echo "${{ steps.ssl_decrypt.outputs.decrypted_content }}" > test.txt
-          echo "Output=$(cat test.txt)" >> "$GITHUB_STEP_SUMMARY"
+          cp test.txt test_copy.txt
+          echo "Output=$(cat test_copy.txt)" >> "$GITHUB_STEP_SUMMARY"

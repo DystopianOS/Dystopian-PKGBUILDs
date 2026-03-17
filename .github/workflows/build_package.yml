@@ -1,0 +1,55 @@
+name: "Build Package"
+
+on:
+  workflow_call:
+    inputs:
+      pkg_name:
+        description: "Target package name in this repository"
+        required: true
+        type: string
+
+
+jobs:
+  build-package:
+    runs-on: ubuntu-latest
+    outputs:
+      package_name: ${{ steps.finalize.outputs.package_name }}
+      changed: ${{ steps.finalize.outputs.changed }}
+      skipped: ${{ steps.finalize.outputs.skipped }}
+      commit_sha: ${{ steps.finalize.outputs.commit_sha }}
+    steps:
+      - name: Generate GitHub App Token
+        id: app_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.DYSTOPIANBOT_APP_ID }}
+          private-key: ${{ secrets.DYSTOPIANBOT_KEY }}
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Import GPG key
+        id: gpg_import
+        uses: ./gpg-import
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+        with:
+          method: 'inline'
+          gpg_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg_pass: ${{ secrets.GPG_PASSPHRASE }}
+          delete_after_import: 'true'
+          configure_git: 'true'
+          setup_home: 'true'
+          preset_pass: 'true'
+
+      - name: Build package
+        id: build
+        uses: DCx7C5/actions/aur-build-pkg@v1
+        with:
+          pkg_name: ${{ inputs.pkg_name }}
+          gpg_sign: true
+          gpg_key_id: ${{ secrets.GPG_PACKAGER_KEY_ID }}
+          gpg_passhphrase: ${{ secrets.GPG_PACKAGER_PASSPHRASE }}
+          github_token: ${{ steps.app_token.outputs.token }}

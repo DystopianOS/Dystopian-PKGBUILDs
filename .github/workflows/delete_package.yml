@@ -1,0 +1,78 @@
+name: "Delete Package"
+
+on:
+  workflow_call:
+    inputs:
+      pkg_name:
+        description: "Target package name in this repository"
+        required: false
+        default: ''
+        type: string
+
+    outputs:
+      package_name:
+        description: "Resolved package name in packages.json"
+        value: ${{ jobs.delete-package.outputs.package_name }}
+      changed:
+        description: "Whether changes were committed"
+        value: ${{ jobs.delete-package.outputs.changed }}
+      skipped:
+        description: "Whether the package was intentionally skipped"
+        value: ${{ jobs.delete-package.outputs.skipped }}
+      commit_sha:
+        description: "SHA of the created commit"
+        value: ${{ jobs.delete-package.outputs.commit_sha }}
+
+jobs:
+  delete-package:
+    if: ${{ inputs.change_type == 'removed' }}
+    runs-on: ubuntu-latest
+    outputs:
+      deleted_package: ${{ steps.finalize.outputs.package_name }}
+    steps:
+      - name: Generate GitHub App Token
+        id: app_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.DYSTOPIANBOT_APP_ID }}
+          private-key: ${{ secrets.DYSTOPIANBOT_KEY }}
+
+      - name: Checkout PKGBUILDs repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Import GPG key
+        id: gpg_import
+        uses: ./gpg-import
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+        with:
+          method: 'inline'
+          gpg_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg_pass: ${{ secrets.GPG_PASSPHRASE }}
+          delete_after_import: 'true'
+          configure_git: 'true'
+          setup_home: 'true'
+          preset_pass: 'true'
+
+      - name: Remove package directory
+        id: delete_pkg
+        uses: DCx7C5/actions/aur-delete-pkg@v1
+        with:
+          pkg_name: ${{ inputs.pkg_name }}
+          packages_json_path: .ci/packages.json
+          stage_changes: 'true'
+
+      - name: Commit changes
+        id: commit
+        uses: DCx7C5/actions/git-commit@v1
+        with:
+          message: "delete(${{ steps.delete_pkg.outputs.package_name }}): deleted package"
+
+      - name: Push changes
+        uses: DCx7C5/actions/git-push-changes@v1
+        with:
+          repository: '${{ github.repository }}'
+          github_token: ${{ github.token }}
+          ref: '${{ github.ref_name }}'

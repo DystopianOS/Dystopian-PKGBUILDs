@@ -14,3 +14,5 @@ dist/
 
 .gnupg/
 *.sha512
+
+.ci/

@@ -1,0 +1,130 @@
+name: "Initialize GitHub Actions Environment"
+
+on:
+  workflow_dispatch:
+    inputs:
+      manage:
+        description: "Management action:"
+        required: true
+        type: choice
+        options:
+          - setup
+          - remove
+      app_id_secret_name:
+        description: "GitHub App ID secret name:"
+        required: true
+        default: 'APP_ID'
+        type: string
+      app_key_secret_name:
+        description: "GitHub App private key secret name:"
+        required: true
+        default: 'PRIVATE_KEY'
+        type: string
+      scope:
+        required: true
+        default: 'repo'
+        description: "Secret and variable scope type:"
+        type: choice
+        options:
+          - repo
+          - org
+          - env
+
+
+jobs:
+  init-env:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    outputs:
+      matrix: ${{ steps.set_secrets_and_vars.outputs.matrix }}
+
+    steps:
+      - name: Set Secrets & Vars
+        id: set_secrets_and_vars
+        run: |
+          
+          {
+            echo "matrix<<EOF"
+            { echo -e "AUR_DB_NAME\nAUR_DB_REPO_NAME\nAUR_DB_REPO_OWNER\nDYSTOPIANBOT_APP_ID\nDYSTOPIANBOT_INSTALL_ID"
+              echo -e "DYSTOPIANBOT_KEY\nGPG_KEY_GRIP\nGPG_KEY_ID\nGPG_PACKAGER_KEY_GRIP\nGPG_PACKAGER_KEY_ID"
+              echo -e "GPG_PACKAGER_PASSPHRASE\nGPG_PACKAGER_PRIVATE_KEY\nGPG_PACKAGER_UID\nGPG_PASSPHRASE"
+              echo -en "GPG_PRIVATE_KEY\nGPG_UID\nTELEGRAM_BOT_TOKEN\nTELEGRAM_CHANNEL_ID"
+            } | jq -Rs 'split("\n")' | jq -nR --argjson secrets "$(cat -)" '{secrets: $secrets,variables: ["JSON_PACKAGES"]}'
+            echo "EOF" 
+          } >> "$GITHUB_OUTPUT"
+
+  set-secrets:
+    runs-on: ubuntu-latest
+    needs: init-env
+    if: inputs.manage == 'setup'
+    strategy:
+      matrix: ${{ fromJson(needs.init-env.outputs.matrix) }}
+    permissions:
+      actions: write
+      contents: write
+    steps:
+      - name: Generate GitHub App Token
+        id: app_token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets[format('{0}', inputs.app_id_secret_name)] }}
+          private-key: ${{ secrets[format('{0}', inputs.app_key_secret_name)] }}
+
+      - name: Set environment secrets
+        uses: DCx7C5/actions/store-as-secret@v1
+        with:
+          context: ${{ github.repository }}
+          secret_type: ${{ inputs.scope }}
+          secret_name: ${{ matrix.secrets }}
+          value: '\0'
+          github_token: ${{ steps.app_token.outputs.token }}
+
+      - name: Set environment variables
+        uses: DCx7C5/actions/store-as-variable@v1
+        with:
+          context: ${{ github.repository }}
+          variable_type: ${{ inputs.scope }}
+          variable_name: ${{ matrix.variables }}
+          value: '\0'
+          github_token: ${{ steps.app_token.outputs.token }}
+
+  remove-secrets:
+    runs-on: ubuntu-latest
+    needs: init-env
+    if: inputs.manage == 'remove'
+    strategy:
+      matrix: ${{ fromJson(needs.init-env.outputs.matrix) }}
+    steps:
+      - name: Generate GitHub App Token
+        id: app_token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets[format('{0}', inputs.app_id_secret_name)] }}
+          private-key: ${{ secrets[format('{0}', inputs.app_key_secret_name)] }}
+
+      - name: Remove
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+        run: |
+          
+          if [ "${{ inputs.scope }}" = "org" ]; then
+            context_arg="--org=${{ steps.app_token.outputs.token }}"
+            cond_arg="--owner=${{ github.repository_owner }}"
+          elif [ "${{ inputs.scope }}" = "env" ]; then
+            context_arg="--env=${{ steps.app_token.outputs.token }}"
+            cond_arg="--env=${{ steps.app_token.outputs.token }}"
+          else
+            context_arg="--repo=${{ github.repository }}"
+            cond_arg="--repo=${{ github.repository }}"
+          fi
+          
+          gh secret delete "${{ matrix.secrets }}" "${context_arg}" "${cond_arg}" 2>/dev/null || {
+            echo "::warning::Failed to delete secret ${{ matrix.secrets }}. It may not exist or you may not have permission to delete it." >&2
+          }
+          gh variable delete "${{ matrix.variables }}" "${context_arg}" "${cond_arg}" 2>/dev/null || {
+            echo "::warning::Failed to delete variable ${{ matrix.variables }}. It may not exist or you may not have permission to delete it." >&2
+          }
+          echo "Removed ${{ matrix.secrets }} and ${{ matrix.variables }} from ${{ inputs.scope }} scope"

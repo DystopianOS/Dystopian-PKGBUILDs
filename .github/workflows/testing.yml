@@ -91,7 +91,11 @@ jobs:
         if: always()
         run: |
           echo '::notice::All packages: ${{ steps.all_json_packages.outputs.packages }}'
-          echo "::notice::One package: ${{ steps.one_json_package.outputs.packages }}"
+          echo "::notice::One package: "
+          echo "::notice::Repoitory:  ${{ steps.one_json_package.outputs.repository }}"
+          echo "::notice::Custom:  ${{ steps.one_json_package.outputs.Custom }}"
+          echo "::notice::remote_dir:  ${{ steps.one_json_package.outputs.remote_dir }}"
+          echo "::notice::submodule: ${{ steps.one_json_package.outputs.submodule }}"
           echo "::notice::Added package: ${{ steps.add_json_package.outputs.packages }}"
           echo "::notice::Removed package: ${{ steps.remove_json_package.outputs.packages }}"
           echo "::notice::Updated package: ${{ steps.update_json_package.outputs.packages }}"

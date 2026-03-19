@@ -33,7 +33,12 @@ jobs:
           echo "Checking authentication with GitHub API..."
           {
             echo "auth<<EOF"
-            gh auth status
+            gh secret list -o DystopianOS
+            echo "EOF"
+          } >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "auth<<EOF"
+            gh variable list -o DystopianOS
             echo "EOF"
           } >> "$GITHUB_STEP_SUMMARY"
 

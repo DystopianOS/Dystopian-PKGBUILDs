@@ -27,6 +27,8 @@ jobs:
       - name: Verify AUth
         id: auth_check
         shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
         run: |
           echo "Checking authentication with GitHub API..."
           {

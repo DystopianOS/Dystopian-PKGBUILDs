@@ -56,17 +56,6 @@ jobs:
           variable_scope: 'org'
           github_token: ${{ steps.app_token.outputs.token }}
 
-      - name: Remove the added package from JSON_PACKAGES
-        id: remove_json_package
-        uses: DCx7C5/actions/aur-json-packages@v1
-        with:
-          json_file: ${{ vars.JSON_PACKAGES }}
-          action: 'remove'
-          pkg_name: 'zstd/zstd-pgo'
-          steps_out: 'true'
-          variable_scope: 'org'
-          github_token: ${{ steps.app_token.outputs.token }}
-
       - name: Update a package in JSON_PACKAGES
         id: update_json_package
         uses: DCx7C5/actions/aur-json-packages@v1
@@ -76,6 +65,17 @@ jobs:
           pkg_name: 'zzzzzz'
           key: 'repository'
           value: ${{ inputs.test_input }}
+          steps_out: 'true'
+          variable_scope: 'org'
+          github_token: ${{ steps.app_token.outputs.token }}
+
+      - name: Remove the added package from JSON_PACKAGES
+        id: remove_json_package
+        uses: DCx7C5/actions/aur-json-packages@v1
+        with:
+          json_file: ${{ vars.JSON_PACKAGES }}
+          action: 'remove'
+          pkg_name: 'zzzzzz'
           steps_out: 'true'
           variable_scope: 'org'
           github_token: ${{ steps.app_token.outputs.token }}

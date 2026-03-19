@@ -131,7 +131,7 @@ jobs:
         id: ssl_encrypt
         uses: DCx7C5/actions/ssl-encrypt@v1
         with:
-          input: ${{ inputs.test_input }}
+          in: ${{ inputs.test_input }}
           input_encoding: 'raw'
           input_type: 'inline'
           output_encoding: 'base64'
@@ -156,7 +156,7 @@ jobs:
         id: ssl_decrypt
         uses: DCx7C5/actions/ssl-decrypt@v1
         with:
-          enc_input: ${{ steps.ssl_encrypt.outputs.encrypted_content }}
+          in: ${{ steps.ssl_encrypt.outputs.encrypted_content }}
           input_encoding: 'base64'
           input_type: 'inline'
           passphrase: 'pass'
@@ -179,7 +179,7 @@ jobs:
         id: ssl_encrypt_unique
         uses: DCx7C5/actions/ssl-encrypt@v1
         with:
-          input: ${{ env.unique_value }}
+          in: ${{ env.unique_value }}
           input_encoding: 'raw'
           input_type: 'inline'
           output_encoding: 'base64'
@@ -190,7 +190,7 @@ jobs:
         id: ssl_decrypt_unique
         uses: DCx7C5/actions/ssl-decrypt@v1
         with:
-          enc_input: ${{ steps.ssl_encrypt_unique.outputs.encrypted_content }}
+          in: ${{ steps.ssl_encrypt_unique.outputs.encrypted_content }}
           input_encoding: 'base64'
           input_type: 'inline'
           passphrase: 'pass'

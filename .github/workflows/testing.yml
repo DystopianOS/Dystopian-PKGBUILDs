@@ -87,7 +87,7 @@ jobs:
           json_file: ${{ vars.JSON_PACKAGES }}
           action: 'get_all'
           key: 'custom'
-          value: 'true'
+          value: true
           steps_out: 'true'
           variable_scope: 'org'
           github_token: ${{ steps.app_token.outputs.token }}
@@ -98,7 +98,7 @@ jobs:
           echo '::notice::All packages: ${{ steps.all_json_packages.outputs.packages }}'
           echo "::notice::One package: "
           echo "::notice::Repoitory:  ${{ steps.one_json_package.outputs.repository }}"
-          echo "::notice::Custom:  ${{ steps.one_json_package.outputs.Custom }}"
+          echo "::notice::Custom:  ${{ steps.one_json_package.outputs.custom }}"
           echo "::notice::remote_dir:  ${{ steps.one_json_package.outputs.remote_dir }}"
           echo "::notice::submodule: ${{ steps.one_json_package.outputs.submodule }}"
           echo "::notice::Added package: ${{ steps.add_json_package.outputs.packages }}"
@@ -106,7 +106,7 @@ jobs:
           echo "::notice::Updated package: ${{ steps.update_json_package.outputs.packages }}"
           echo "::notice::Custom packages: ${{ steps.get_custom_packages.outputs.packages }}"
 
-  test-job:
+  test-ssl:
     runs-on: ubuntu-latest
     steps:
       - name: Print test input

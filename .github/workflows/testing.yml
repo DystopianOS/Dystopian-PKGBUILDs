@@ -24,6 +24,17 @@ jobs:
           app-id: ${{ secrets.DYSTOPIANBOT_APP_ID }}
           private-key: ${{ secrets.DYSTOPIANBOT_KEY }}
 
+      - name: Verify AUth
+        id: auth_check
+        shell: bash
+        run: |
+          echo "Checking authentication with GitHub API..."
+          {
+            echo "auth<<EOF"
+            gh auth status
+            echo "EOF"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Test Get ALL JSON_PACKAGES
         id: all_json_packages
         uses: DCx7C5/actions/aur-json-packages@v1

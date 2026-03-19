@@ -28,7 +28,7 @@ jobs:
         id: all_json_packages
         uses: DCx7C5/actions/aur-json-packages@v1
         with:
-          json_file: 'JSON_PACKAGES'
+          json_file: ${{ vars.JSON_PACKAGES }}
           action: 'get'
           variable_scope: 'org'
           github_token: ${{ steps.app_token.outputs.token }}
@@ -37,7 +37,7 @@ jobs:
         id: one_json_package
         uses: DCx7C5/actions/aur-json-packages@v1
         with:
-          json_file: 'JSON_PACKAGES'
+          json_file: ${{ vars.JSON_PACKAGES }}
           pkg_name: 'zstd/zstd-pgo'
           action: 'get'
           github_token: ${{ steps.app_token.outputs.token }}
@@ -46,7 +46,7 @@ jobs:
         id: add_json_package
         uses: DCx7C5/actions/aur-json-packages@v1
         with:
-          json_file: 'JSON_PACKAGES'
+          json_file: ${{ vars.JSON_PACKAGES }}
           pkg_name: 'zzzzzz'
           action: 'add'
           key: 'custom'
@@ -58,7 +58,7 @@ jobs:
         id: remove_json_package
         uses: DCx7C5/actions/aur-json-packages@v1
         with:
-          json_file: 'JSON_PACKAGES'
+          json_file: ${{ vars.JSON_PACKAGES }}
           action: 'remove'
           pkg_name: 'zstd/zstd-pgo'
           steps_out: 'true'
@@ -68,7 +68,7 @@ jobs:
         id: update_json_package
         uses: DCx7C5/actions/aur-json-packages@v1
         with:
-          json_file: 'JSON_PACKAGES'
+          json_file: ${{ vars.JSON_PACKAGES }}
           action: 'update'
           pkg_name: 'zzzzzz'
           key: 'repository'
@@ -80,7 +80,7 @@ jobs:
         id: get_custom_packages
         uses: DCx7C5/actions/aur-json-packages@v1
         with:
-          json_file: 'JSON_PACKAGES'
+          json_file: ${{ vars.JSON_PACKAGES }}
           action: 'get_all'
           key: 'custom'
           value: 'true'

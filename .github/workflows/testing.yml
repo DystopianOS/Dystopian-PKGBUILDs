@@ -40,6 +40,7 @@ jobs:
           json_file: ${{ vars.JSON_PACKAGES }}
           pkg_name: 'zstd/zstd-pgo'
           action: 'get'
+          variable_scope: 'org'
           github_token: ${{ steps.app_token.outputs.token }}
 
       - name: Add a package to JSON_PACKAGES
@@ -52,6 +53,7 @@ jobs:
           key: 'custom'
           value: true
           steps_out: 'true'
+          variable_scope: 'org'
           github_token: ${{ steps.app_token.outputs.token }}
 
       - name: Remove the added package from JSON_PACKAGES
@@ -62,6 +64,7 @@ jobs:
           action: 'remove'
           pkg_name: 'zstd/zstd-pgo'
           steps_out: 'true'
+          variable_scope: 'org'
           github_token: ${{ steps.app_token.outputs.token }}
 
       - name: Update a package in JSON_PACKAGES
@@ -74,6 +77,7 @@ jobs:
           key: 'repository'
           value: ${{ inputs.test_input }}
           steps_out: 'true'
+          variable_scope: 'org'
           github_token: ${{ steps.app_token.outputs.token }}
 
       - name: Get all packages where custom is true
@@ -85,6 +89,7 @@ jobs:
           key: 'custom'
           value: 'true'
           steps_out: 'true'
+          variable_scope: 'org'
           github_token: ${{ steps.app_token.outputs.token }}
 
       - name: Summarize results

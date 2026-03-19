@@ -85,7 +85,7 @@ jobs:
         uses: DCx7C5/actions/aur-json-packages@v1
         with:
           json_file: ${{ vars.JSON_PACKAGES }}
-          action: 'get_all'
+          action: 'get'
           key: 'custom'
           value: true
           steps_out: 'true'

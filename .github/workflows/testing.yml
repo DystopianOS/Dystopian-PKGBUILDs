@@ -154,13 +154,13 @@ jobs:
       - name: Check
         shell: bash
         run: |
-          echo "::notice::${{ steps.ssl_encrypt.outputs.encrypted_content }}"
+          echo "::notice::${{ steps.ssl_encrypt.outputs.out }}"
           echo "::notice::${{ steps.ssl_encrypt.outputs.type }}"
           echo "::notice::${{ steps.ssl_encrypt.outputs.encoding }}"
-          echo "::notice::${{ steps.ssl_encrypt.outputs.encrypted_content }}"
+          echo "::notice::${{ steps.ssl_encrypt.outputs.out }}"
           
           echo "::notice::Decrypting content..."
-          echo "${{ steps.ssl_encrypt.outputs.encrypted_content }}" | base64 -d | openssl enc -aes-256-cbc -d -pass pass:pass -pbkdf2 || {
+          echo "${{ steps.ssl_encrypt.outputs.out }}" | base64 -d | openssl enc -aes-256-cbc -d -pass pass:pass -pbkdf2 || {
             echo "::error::Decryption failed" >&2
             exit 1
           }
@@ -169,7 +169,7 @@ jobs:
         id: ssl_decrypt
         uses: DCx7C5/actions/ssl-decrypt@v1
         with:
-          in: ${{ steps.ssl_encrypt.outputs.encrypted_content }}
+          in: ${{ steps.ssl_encrypt.outputs.out }}
           input_encoding: 'base64'
           input_type: 'inline'
           passphrase: 'pass'
@@ -178,7 +178,7 @@ jobs:
       - name: Print decrypted content
         shell: bash
         run: |
-          echo "${{ steps.ssl_decrypt.outputs.decrypted_content }}" > test.txt
+          echo "${{ steps.ssl_decrypt.outputs.out }}" > test.txt
           test=$(cat test.txt)
           echo "::notice::Decrypted content: ${test:0:-1}r"
 
@@ -203,7 +203,7 @@ jobs:
         id: ssl_decrypt_unique
         uses: DCx7C5/actions/ssl-decrypt@v1
         with:
-          in: ${{ steps.ssl_encrypt_unique.outputs.encrypted_content }}
+          in: ${{ steps.ssl_encrypt_unique.outputs.out }}
           input_encoding: 'base64'
           input_type: 'inline'
           passphrase: 'pass'
@@ -212,6 +212,6 @@ jobs:
       - name: Print decrypted unique value
         shell: bash
         run: |
-          echo "${{ steps.ssl_decrypt_unique.outputs.decrypted_content }}" > test_unique.txt
+          echo "${{ steps.ssl_decrypt_unique.outputs.out }}" > test_unique.txt
           test_unique=$(cat test_unique.txt)
           echo "::notice::Decrypted unique content: $(echo -n "${test_unique:0:-1}r")"

@@ -88,6 +88,7 @@ jobs:
           github_token: ${{ steps.app_token.outputs.token }}
 
       - name: Summarize results
+        if: always()
         run: |
           echo '::notice::All packages: ${{ steps.all_json_packages.outputs.packages }}'
           echo "::notice::One package: ${{ steps.one_json_package.outputs.packages }}"

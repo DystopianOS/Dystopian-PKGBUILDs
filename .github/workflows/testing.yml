@@ -1,7 +1,5 @@
 name: "Testing things"
 
-
-
 on:
   workflow_dispatch:
     inputs:
@@ -12,6 +10,92 @@ on:
         type: string
 
 jobs:
+  test-json:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+
+    steps:
+      - name: GitHub App Token
+        id: app_token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.DYSTOPIANBOT_APP_ID }}
+          private-key: ${{ secrets.DYSTOPIANBOT_KEY }}
+
+      - name: Test Get ALL JSON_PACKAGES
+        id: all_json_packages
+        uses: DCx7C5/actions/aur-json-packages@v1
+        with:
+          json_file: 'JSON_PACKAGES'
+          action: 'get'
+          variable_scope: 'org'
+          github_token: ${{ steps.app_token.outputs.token }}
+
+      - name: Get one package from JSON_PACKAGES
+        id: one_json_package
+        uses: DCx7C5/actions/aur-json-packages@v1
+        with:
+          json_file: 'JSON_PACKAGES'
+          pkg_name: 'zstd/zstd-pgo'
+          action: 'get'
+          github_token: ${{ steps.app_token.outputs.token }}
+
+      - name: Add a package to JSON_PACKAGES
+        id: add_json_package
+        uses: DCx7C5/actions/aur-json-packages@v1
+        with:
+          json_file: 'JSON_PACKAGES'
+          pkg_name: 'zzzzzz'
+          action: 'add'
+          key: 'custom'
+          value: true
+          steps_out: 'true'
+          github_token: ${{ steps.app_token.outputs.token }}
+
+      - name: Remove the added package from JSON_PACKAGES
+        id: remove_json_package
+        uses: DCx7C5/actions/aur-json-packages@v1
+        with:
+          json_file: 'JSON_PACKAGES'
+          action: 'remove'
+          pkg_name: 'zstd/zstd-pgo'
+          steps_out: 'true'
+          github_token: ${{ steps.app_token.outputs.token }}
+
+      - name: Update a package in JSON_PACKAGES
+        id: update_json_package
+        uses: DCx7C5/actions/aur-json-packages@v1
+        with:
+          json_file: 'JSON_PACKAGES'
+          action: 'update'
+          pkg_name: 'zzzzzz'
+          key: 'repository'
+          value: ${{ inputs.test_input }}
+          steps_out: 'true'
+          github_token: ${{ steps.app_token.outputs.token }}
+
+      - name: Get all packages where custom is true
+        id: get_custom_packages
+        uses: DCx7C5/actions/aur-json-packages@v1
+        with:
+          json_file: 'JSON_PACKAGES'
+          action: 'get_all'
+          key: 'custom'
+          value: 'true'
+          steps_out: 'true'
+          github_token: ${{ steps.app_token.outputs.token }}
+
+      - name: Summarize results
+        run: |
+          echo '::notice::All packages: ${{ steps.all_json_packages.outputs.packages }}'
+          echo "::notice::One package: ${{ steps.one_json_package.outputs.packages }}"
+          echo "::notice::Added package: ${{ steps.add_json_package.outputs.packages }}"
+          echo "::notice::Removed package: ${{ steps.remove_json_package.outputs.packages }}"
+          echo "::notice::Updated package: ${{ steps.update_json_package.outputs.packages }}"
+          echo "::notice::Custom packages: ${{ steps.get_custom_packages.outputs.packages }}"
+
   test-job:
     runs-on: ubuntu-latest
     steps:
@@ -118,4 +202,3 @@ jobs:
           echo "${{ steps.ssl_decrypt_unique.outputs.decrypted_content }}" > test_unique.txt
           test_unique=$(cat test_unique.txt)
           echo "::notice::Decrypted unique content: $(echo -n "${test_unique:0:-1}r")"
-

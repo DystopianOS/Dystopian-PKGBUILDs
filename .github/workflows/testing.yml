@@ -95,7 +95,7 @@ jobs:
       - name: Summarize results
         if: always()
         run: |
-          echo '::notice::All packages: ${{ steps.all_json_packages.outputs.packages }}'
+          echo '::notice::\e[1;32m✓\e[0mAll packages: ${{ steps.all_json_packages.outputs.packages }}'
           echo "::notice::One package: "
           echo "::notice::Repoitory:  ${{ steps.one_json_package.outputs.repository }}"
           echo "::notice::Custom:  ${{ steps.one_json_package.outputs.custom }}"

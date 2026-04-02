@@ -1,5 +1,0 @@
-*.run
-*.pkg.tar.zst
-*.log
-/pkg/
-/src/

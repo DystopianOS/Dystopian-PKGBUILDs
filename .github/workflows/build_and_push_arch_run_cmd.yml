@@ -7,7 +7,7 @@ on:
 
 permissions:
   packages: write
-  contents: read
+  contents: write
   actions: write
 
 
@@ -22,9 +22,6 @@ jobs:
         with:
           app-id: ${{ secrets.DYSTOPIANBOT_APP_ID }}
           private-key: ${{ secrets.DYSTOPIANBOT_KEY }}
-          permission-organization-packages: write
-          permission-packages: write
-          owner: ${{ github.repository_owner }}
 
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -40,8 +37,8 @@ jobs:
         with:
           method: 'inline'
           gpg_home: ${{ format('{0}/.gnupg', github.workspace) }}
-          gpg_key: ${{ secrets.GPG_PRIVATE_KEY }}
-          gpg_pass: ${{ secrets.GPG_PASSPHRASE }}
+          gpg_key: ${{ secrets.GPG_PACKAGER_PRIVATE_KEY }}
+          gpg_pass: ${{ secrets.GPG_PACKAGER_PASSPHRASE }}
           configure_git: 'true'
           setup_home: 'true'
           preset_pass: 'false'
@@ -61,6 +58,9 @@ jobs:
           gh-token: ${{ steps.app_token.outputs.token }}
           image-tag: 'arch-run-cmd'
           image-version: 'latest'
+          build-args: |
+            GPG_KEY_ID=${{ secrets.GPG_PACKAGER_KEY_ID }}
+            GPG_PASSPHRASE=${{ secrets.GPG_PACKAGER_PASSPHRASE }}
 
       - name: Push Docker image
         id: push_image
@@ -69,6 +69,6 @@ jobs:
         with:
           image-tag: 'arch-run-cmd'
           image-version: 'latest'
-          gh-token: ${{ steps.app_token.outputs.token }}
+          gh-token: ${{ secrets.GITHUB_TOKEN }}
           user: ${{ github.actor }}
           registry: 'ghcr.io'

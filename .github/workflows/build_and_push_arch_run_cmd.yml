@@ -47,7 +47,6 @@ jobs:
         id: build_image
         uses: DCx7C5/actions/docker-build-image@v1
         with:
-          image-working-directory: ${{ github.workspace }}/arch-run-cmd
           runtime-working-directory: ${{ github.workspace }}
           gpg-home: ${{ format('{0}/.gnupg', github.workspace) }}
           ccache-dir: ${{ format('{0}/.ccache', github.workspace) }}

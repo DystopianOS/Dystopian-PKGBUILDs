@@ -1,0 +1,45 @@
+name: "Manage PKGBUILD Metadata"
+
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        required: true
+        description: "The action to perform ( get, add, update, delete, remove )"
+      pkgnames:
+        required: false
+        description: "New-line separated list of package names to add/update/remove/get"
+      keys:
+        required: false
+        description: "New-line separated list of keys to add/update/remove/get"
+      values:
+        required: false
+        description: "New-line separated list of values to add/update/remove/get"
+
+
+jobs:
+  manage_pkgbuilds:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate GitHub App Token
+        id: app_token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.DYSTOPIANBOT_APP_ID }}
+          private-key: ${{ secrets.DYSTOPIANBOT_KEY }}
+
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: '0'
+          submodules: 'true'
+
+      - name: Manage PKGBUILD metadata
+        uses: DCx7C5/actions/aur-json-packages@v1
+        with:
+          action: ${{ inputs.action }}
+          org: ${{ github.repository_owner }}
+          pkg-name: ${{ inputs.pkgnames }}
+          key: ${{ inputs.keys }}
+          value: ${{ inputs.values }}
+          gh-token: ${{ steps.app_token.outputs.token }}

@@ -33,8 +33,8 @@ jobs:
         with:
           fetch-depth: '0'
           submodules: 'true'
-
       - name: Manage PKGBUILD metadata
+        id: manage
         uses: DCx7C5/actions/aur-json-packages@v1
         with:
           action: ${{ inputs.action }}
@@ -43,3 +43,46 @@ jobs:
           key: ${{ inputs.keys }}
           value: ${{ inputs.values }}
           gh-token: ${{ steps.app_token.outputs.token }}
+
+      - name: Step Summary
+        if: inputs.action == 'get' && steps.manage.outputs.out != ''
+        env:
+          OUT: ${{ steps.manage.outputs.out }}
+          PKGNAMES: ${{ inputs.pkgnames }}
+          KEYS: ${{ inputs.keys }}
+        run: |
+          {
+            echo "### 📦 Package Query Result"
+            echo ""
+            if [[ -n "$PKGNAMES" ]]; then
+              echo "**Packages:** \`$(printf '%s' "$PKGNAMES" | tr '\n' ' ' | sed 's/ $//')\`"
+            fi
+            if [[ -n "$KEYS" ]]; then
+              echo "**Keys:** \`$(printf '%s' "$KEYS" | tr '\n' ' ' | sed 's/ $//')\`"
+            fi
+            echo ""
+
+            pkg_count="$(jq 'length' <<< "$OUT")"
+            echo "**Results:** ${pkg_count} package(s)"
+            echo ""
+
+            echo "| Package | Key | Value |"
+            echo "|:--------|:----|:------|"
+            jq -r '
+              to_entries[] |
+              .key as $pkg |
+              if (.value | type) == "object" then
+                .value | to_entries[] | "| \($pkg) | \(.key) | \(.value) |"
+              else
+                "| \($pkg) | — | \(.value) |"
+              end
+            ' <<< "$OUT"
+
+            echo ""
+            echo "<details><summary>Raw JSON</summary>"
+            echo ""
+            echo '```json'
+            jq '.' <<< "$OUT"
+            echo '```'
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"

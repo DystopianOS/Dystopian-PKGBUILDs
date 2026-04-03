@@ -9,13 +9,13 @@ on:
         description: "The action to perform ( get, add, update, delete, remove )"
       pkgnames:
         required: false
-        description: "New-line separated list of package names to add/update/remove/get"
+        description: "Package names — comma, space, or newline separated"
       keys:
         required: false
-        description: "New-line separated list of keys to add/update/remove/get"
+        description: "Keys — comma, space, or newline separated"
       values:
         required: false
-        description: "New-line separated list of values to add/update/remove/get"
+        description: "Values — comma or newline separated (spaces preserved per value)"
 
 
 jobs:
@@ -33,23 +33,47 @@ jobs:
         with:
           fetch-depth: '0'
           submodules: 'true'
+
+      - name: Normalize inputs
+        id: normalize
+        env:
+          PKGNAMES: ${{ inputs.pkgnames }}
+          KEYS: ${{ inputs.keys }}
+          VALUES: ${{ inputs.values }}
+        run: |
+          # split on comma, semicolon, or whitespace — trim each token — drop empty lines
+          normalize_words() {
+            printf '%s\n' "$1" | tr ',;' '\n' | tr -s ' \t' '\n' \
+              | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$' || true
+          }
+          # split on comma or newline only — preserve spaces within a value
+          normalize_values() {
+            printf '%s\n' "$1" | tr ',' '\n' \
+              | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$' || true
+          }
+          {
+            printf 'pkgnames<<__NORM__\n%s\n__NORM__\n' "$(normalize_words "$PKGNAMES")"
+            printf 'keys<<__NORM__\n%s\n__NORM__\n'     "$(normalize_words "$KEYS")"
+            printf 'values<<__NORM__\n%s\n__NORM__\n'   "$(normalize_values "$VALUES")"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Manage PKGBUILD metadata
         id: manage
         uses: DCx7C5/actions/aur-json-packages@v1
         with:
           action: ${{ inputs.action }}
           org: ${{ github.repository_owner }}
-          pkg-name: ${{ inputs.pkgnames }}
-          key: ${{ inputs.keys }}
-          value: ${{ inputs.values }}
+          pkg-name: ${{ steps.normalize.outputs.pkgnames }}
+          key: ${{ steps.normalize.outputs.keys }}
+          value: ${{ steps.normalize.outputs.values }}
           gh-token: ${{ steps.app_token.outputs.token }}
 
       - name: Step Summary
         if: inputs.action == 'get' && steps.manage.outputs.out != ''
         env:
           OUT: ${{ steps.manage.outputs.out }}
-          PKGNAMES: ${{ inputs.pkgnames }}
-          KEYS: ${{ inputs.keys }}
+          PKGNAMES: ${{ steps.normalize.outputs.pkgnames }}
+          KEYS: ${{ steps.normalize.outputs.keys }}
         run: |
           {
             echo "### 📦 Package Query Result"

@@ -73,7 +73,7 @@ jobs:
 
       - name: Run Command in Arch Linux Container
         id: arch_run
-        uses: .github/actions/arch-run-cmd
+        uses: ./.github/actions/arch-run-cmd
         with:
           command: ${{ inputs.command }}
           working-directory: ${{ inputs.working_directory }}

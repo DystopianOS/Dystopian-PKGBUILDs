@@ -32,6 +32,20 @@ jobs:
           fetch-depth: 0
           token: ${{ steps.app_token.outputs.token }}
 
+      - name: Import GPG key
+        id: gpg_import
+        uses: DCx7C5/actions/gpg-import@v1
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+        with:
+          method: 'inline'
+          gpg_home: ${{ format('{0}/.gnupg', github.workspace) }}
+          gpg_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg_pass: ${{ secrets.GPG_PASSPHRASE }}
+          configure_git: 'true'
+          setup_home: 'true'
+          preset_pass: 'false'
+
       - name: Build Docker image
         id: build_image
         uses: DCx7C5/actions/docker-build-image@v1

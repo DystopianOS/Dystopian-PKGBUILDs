@@ -22,7 +22,6 @@ jobs:
         with:
           app-id: ${{ secrets.DYSTOPIANBOT_APP_ID }}
           private-key: ${{ secrets.DYSTOPIANBOT_KEY }}
-          repositories: actions
           permission-organization-packages: write
           permission-packages: write
           owner: ${{ github.repository_owner }}

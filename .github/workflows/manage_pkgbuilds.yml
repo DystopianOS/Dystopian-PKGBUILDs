@@ -15,7 +15,7 @@ on:
         description: "Keys — comma, space, or newline separated"
       values:
         required: false
-        description: "Values — comma or newline separated (spaces preserved per value)"
+        description: "Values — semicolon or newline separated (commas preserved for JSON)"
 
 
 jobs:
@@ -46,9 +46,9 @@ jobs:
             printf '%s\n' "$1" | tr ',;' '\n' | tr -s ' \t' '\n' \
               | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$' || true
           }
-          # split on comma or newline only — preserve spaces within a value
+          # split on semicolons or newlines only — preserve commas and spaces within a value (for JSON)
           normalize_values() {
-            printf '%s\n' "$1" | tr ',' '\n' \
+            printf '%s\n' "$1" | tr ';' '\n' \
               | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$' || true
           }
           {

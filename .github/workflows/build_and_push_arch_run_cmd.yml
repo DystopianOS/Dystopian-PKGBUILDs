@@ -25,6 +25,7 @@ jobs:
           repositories: actions
           permission-organization-packages: write
           permission-packages: write
+          owner: ${{ github.repository_owner }}
 
       - name: Checkout repository
         uses: actions/checkout@v6

@@ -6,7 +6,7 @@ on:
     inputs:
       action:
         required: true
-        description: "The action to perform ( get, add, update, delete, remove )"
+        description: "The action to perform ( get, add, update, delete [alias: remove] )"
       pkgnames:
         required: false
         description: "Package names — comma, space, or newline separated"
@@ -57,16 +57,121 @@ jobs:
             printf 'values<<__NORM__\n%s\n__NORM__\n'   "$(normalize_values "$VALUES")"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Normalize action alias
+        id: normalize_action
+        env:
+          ACTION: ${{ inputs.action }}
+        run: |
+          action="${ACTION,,}"
+          if [[ "$action" == "remove" ]]; then
+            action='delete'
+          fi
+          echo "action=$action" >> "$GITHUB_OUTPUT"
+
       - name: Manage PKGBUILD metadata
         id: manage
         uses: DCx7C5/actions/aur-json-packages@v1
         with:
-          action: ${{ inputs.action }}
+          action: ${{ steps.normalize_action.outputs.action }}
           org: ${{ github.repository_owner }}
           pkg-name: ${{ steps.normalize.outputs.pkgnames }}
           key: ${{ steps.normalize.outputs.keys }}
           value: ${{ steps.normalize.outputs.values }}
           gh-token: ${{ steps.app_token.outputs.token }}
+
+      - name: Verify mutation result
+        id: verify_mutation
+        if: steps.normalize_action.outputs.action == 'add' || steps.normalize_action.outputs.action == 'update' || steps.normalize_action.outputs.action == 'delete'
+        uses: DCx7C5/actions/aur-json-packages@v1
+        with:
+          action: get
+          org: ${{ github.repository_owner }}
+          pkg-name: ${{ steps.normalize.outputs.pkgnames }}
+          key: ${{ steps.normalize.outputs.keys }}
+          gh-token: ${{ steps.app_token.outputs.token }}
+
+      - name: Mutation Summary
+        if: steps.normalize_action.outputs.action == 'add' || steps.normalize_action.outputs.action == 'update' || steps.normalize_action.outputs.action == 'delete'
+        env:
+          ACTION: ${{ steps.normalize_action.outputs.action }}
+          MANAGE_OUT: ${{ steps.manage.outputs.out }}
+          VERIFY_OUT: ${{ steps.verify_mutation.outputs.out }}
+          PKGNAMES: ${{ steps.normalize.outputs.pkgnames }}
+          KEYS: ${{ steps.normalize.outputs.keys }}
+          VALUES: ${{ steps.normalize.outputs.values }}
+        run: |
+          mutation_saved='false'
+          verify_ok='false'
+          reason=''
+
+          [[ "$MANAGE_OUT" == 'saved' ]] && mutation_saved='true'
+
+          if [[ -z "$VERIFY_OUT" ]]; then
+            reason='No verification output returned.'
+          else
+            case "$ACTION" in
+              add|update)
+                if jq -e '
+                  def has_non_null:
+                    if type=="null" then false
+                    elif type=="object" then any(.[]; has_non_null)
+                    elif type=="array" then any(.[]; has_non_null)
+                    else true
+                    end;
+                  has_non_null
+                ' <<< "$VERIFY_OUT" >/dev/null; then
+                  verify_ok='true'
+                else
+                  reason='Expected non-null values after add/update, but none were found.'
+                fi
+                ;;
+              delete)
+                if jq -e '
+                  def is_all_null:
+                    if type=="null" then true
+                    elif type=="object" then all(.[]; is_all_null)
+                    elif type=="array" then all(.[]; is_all_null)
+                    else false
+                    end;
+                  is_all_null
+                ' <<< "$VERIFY_OUT" >/dev/null; then
+                  verify_ok='true'
+                else
+                  reason='Expected null/missing targets after delete, but values are still present.'
+                fi
+                ;;
+            esac
+          fi
+
+          status_icon() { [[ "$1" == 'true' ]] && printf '✅' || printf '❌'; }
+
+          {
+            echo "### 🛠️ PKGBUILD Mutation Result"
+            echo ""
+            echo "| Check | Status | Details |"
+            echo "|:------|:------:|:--------|"
+            echo "| Action | \`$ACTION\` | Requested mutation |"
+            echo "| Save | $(status_icon "$mutation_saved") | \`manage.out=${MANAGE_OUT:-n/a}\` |"
+            echo "| Verify | $(status_icon "$verify_ok") | Post-get verification |"
+            echo ""
+
+            [[ -n "$PKGNAMES" ]] && echo "**Packages:** \`$(printf '%s' "$PKGNAMES" | tr '\n' ' ' | sed 's/ $//')\`"
+            [[ -n "$KEYS" ]] && echo "**Keys:** \`$(printf '%s' "$KEYS" | tr '\n' ' ' | sed 's/ $//')\`"
+            [[ -n "$VALUES" ]] && echo "**Values:** \`$(printf '%s' "$VALUES" | tr '\n' '|' | sed 's/|$//')\`"
+
+            if [[ -n "$reason" ]]; then
+              echo ""
+              echo "⚠️ $reason"
+            fi
+
+            echo ""
+            echo "<details><summary>Verification JSON</summary>"
+            echo ""
+            echo '```json'
+            jq '.' <<< "${VERIFY_OUT:-{}}"
+            echo '```'
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Step Summary
         if: inputs.action == 'get' && steps.manage.outputs.out != ''

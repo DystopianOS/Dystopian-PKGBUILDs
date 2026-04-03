@@ -1,0 +1,100 @@
+name: "Run Command in Arch Linux Environment"
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "Command/script to execute inside container"
+        required: true
+        default: 'echo "Hello, Arch Linux!"'
+        type: string
+      enable_ccache:
+        description: "Enable ccache in the Arch Run Command Action"
+        required: false
+        default: true
+        type: boolean
+      run_with_sudo:
+        description: "Whether to run the command with sudo inside the container"
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  run-command:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    permissions:
+        packages: write
+        contents: write
+        actions: write
+    steps:
+      - name: GitHub App Token
+        id: app_token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.DYSTOPIANBOT_APP_ID }}
+          private-key: ${{ secrets.DYSTOPIANBOT_KEY }}
+          repositories: actions
+
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app_token.outputs.token }}
+
+      - name: Import GPG key
+        id: gpg_import
+        uses: DCx7C5/actions/gpg-import@v1
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+        with:
+          method: 'inline'
+          gpg_home: ${{ format('{0}/.gnupg', github.workspace) }}
+          gpg_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg_pass: ${{ secrets.GPG_PASSPHRASE }}
+          configure_git: 'true'
+          setup_home: 'true'
+          preset_pass: 'true'
+
+      - name: Pre-run Summary
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## 🐧 Arch Linux Run Command
+
+          | Parameter | Value |
+          |-----------|-------|
+          | **Command** | `${{ inputs.command }}` |
+          | **ccache** | `${{ inputs.enable_ccache }}` |
+          | **sudo** | `${{ inputs.run_with_sudo }}` |
+          | **Runner** | `${{ runner.os }} (${{ runner.arch }})` |
+          | **Triggered by** | `${{ github.actor }}` |
+          EOF
+
+
+      - name: Run Command in Arch Linux Container
+        id: arch_run
+        uses: DCx7C5/actions/arch-run-cmd@v1
+        with:
+          command: ${{ inputs.command }}
+          working-directory: ${{ inputs.working_directory }}
+          enable-ccache: ${{ inputs.enable_ccache }}
+          run-with-sudo: ${{ inputs.run_with_sudo }}
+
+      - name: Post-run Summary
+        if: always()
+        run: |
+          if [[ "${{ steps.arch_run.outcome }}" == "success" ]]; then
+            ICON="✅"; STATUS="Success"
+          else
+            ICON="❌"; STATUS="Failed"
+          fi
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+
+          ### ${ICON} Result: ${STATUS}
+
+          | Detail | Value |
+          |--------|-------|
+          | **Outcome** | \`${{ steps.arch_run.outcome }}\` |
+          | **Conclusion** | \`${{ steps.arch_run.conclusion }}\` |
+          EOF

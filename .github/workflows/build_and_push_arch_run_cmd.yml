@@ -69,6 +69,6 @@ jobs:
         with:
           image-tag: 'arch-run-cmd'
           image-version: 'latest'
-          gh-token: ${{ github.token }}
+          gh-token: ${{ steps.app_token.outputs.token }}
           user: ${{ github.actor }}
           registry: 'ghcr.io'

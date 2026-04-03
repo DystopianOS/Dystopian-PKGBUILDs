@@ -78,6 +78,13 @@ jobs:
           working-directory: ${{ inputs.working_directory }}
           enable-ccache: ${{ inputs.enable_ccache }}
           run-with-sudo: ${{ inputs.run_with_sudo }}
+          preset-passphrase-cache: 'true'
+          gh-token: ${{ steps.app_token.outputs.token }}
+          gpg-home: ${{ format('{0}/.gnupg', github.workspace) }}
+          ccache-dir: ${{ format('{0}/.ccache', github.workspace) }}
+          gpg-key-id: ${{ steps.gpg_import.outputs.fingerprint }}
+          gpg-passphrase: ${{ secrets.GPG_PACKAGER_PASSPHRASE }}
+          gpg-keygrips: ${{ steps.gpg_import.outputs.keygrips }}
 
       - name: Post-run Summary
         if: always()

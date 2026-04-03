@@ -71,10 +71,9 @@ jobs:
           | **Triggered by** | `${{ github.actor }}` |
           EOF
 
-
       - name: Run Command in Arch Linux Container
         id: arch_run
-        uses: DCx7C5/actions/arch-run-cmd@v1
+        uses: .github/actions/arch-run-cmd
         with:
           command: ${{ inputs.command }}
           working-directory: ${{ inputs.working_directory }}

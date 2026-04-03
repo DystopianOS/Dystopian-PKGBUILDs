@@ -1,0 +1,66 @@
+name: "Run Command In Arch Linux Docker (AUR Build)"
+description: "Minimal, secure Arch Linux container for AUR builds with GPG & ccache support"
+author: "DCx7c5"
+
+
+inputs:
+  command:
+    description: "Command/script to execute inside container"
+    required: true
+  working-directory:
+    description: "Working directory inside container"
+    required: false
+    default: ''
+  gpg-home:
+    description: "GPG home directory (auto-mounted via workspace volume)"
+    required: false
+    default: ''
+  ccache-dir:
+    description: "ccache directory for build caching"
+    required: false
+    default: ''
+  enable-ccache:
+    description: "Enable ccache for faster incremental builds"
+    required: false
+    default: "true"
+  gh-token:
+    description: "GitHub token for API access"
+    required: false
+    default: ''
+  gpg-key-id:
+    description: "GPG key ID or fingerprint to use for signing"
+    required: false
+    default: ''
+  gpg-keygrips:
+    description: "Keygrips of GPG keys to preset in gpg-agent cache"
+    required: false
+    default: ''
+  gpg-passphrase:
+    description: "Passphrase for GPG key"
+    required: false
+    default: ''
+  preset-passphrase-cache:
+    description: "Whether to preset GPG passphrase in gpg-agent cache"
+    required: false
+    default: 'false'
+  run-with-sudo:
+    description: "Whether to run the command with sudo inside the container"
+    required: false
+    default: 'false'
+
+
+runs:
+  using: docker
+  image: docker://ghcr.io/dystopianos/arch-run-cmd:latest
+  env:
+    GH_TOKEN: "${{ inputs.gh-token }}"
+    GNUPGHOME: "${{ inputs.gpg-home }}"
+    CCACHE_DIR: "${{ inputs.ccache-dir }}"
+    WORKING_DIR: "${{ inputs.working-directory }}"
+    RUN_WITH_SUDO: "${{ inputs.run-with-sudo || 'false' }}"
+    GPG_KEY_ID: "${{ inputs.gpg-key-id }}"
+    GPG_PASSPHRASE: "${{ inputs.gpg-passphrase }}"
+    PRESET_CACHE: "${{ inputs.preset-passphrase-cache || 'false' }}"
+    KEYGRIPS: "${{ inputs.gpg-keygrips }}"
+  args:
+    - ${{ inputs.command }}

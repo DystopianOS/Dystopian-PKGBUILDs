@@ -35,7 +35,6 @@ jobs:
         with:
           app-id: ${{ secrets.DYSTOPIANBOT_APP_ID }}
           private-key: ${{ secrets.DYSTOPIANBOT_KEY }}
-          repositories: actions
 
       - name: Checkout repository
         uses: actions/checkout@v5

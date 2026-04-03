@@ -1,0 +1,60 @@
+name: "Build and Push Arch Run Command Docker Image"
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+
+permissions:
+  packages: write
+  contents: read
+  actions: write
+
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: GitHub App Token
+        id: app_token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.DYSTOPIANBOT_APP_ID }}
+          private-key: ${{ secrets.DYSTOPIANBOT_KEY }}
+          repositories: actions
+          permission-organization-packages: write
+          permission-packages: write
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app_token.outputs.token }}
+
+      - name: Build Docker image
+        id: build_image
+        uses: DCx7C5/actions/docker-build-image@v1
+        with:
+          image-working-directory: ${{ github.workspace }}/arch-run-cmd
+          runtime-working-directory: ${{ github.workspace }}
+          gpg-home: ${{ format('{0}/.gnupg', github.workspace) }}
+          ccache-dir: ${{ format('{0}/.ccache', github.workspace) }}
+          user: runner
+          group: runner
+          uid: '1001'
+          gid: '127'
+          gh-token: ${{ steps.app_token.outputs.token }}
+          image-tag: 'arch-run-cmd'
+          image-version: 'latest'
+
+      - name: Push Docker image
+        id: push_image
+        if: steps.build_image.outcome == 'success'
+        uses: DCx7C5/actions/docker-push-image@v1
+        with:
+          image-tag: 'arch-run-cmd'
+          image-version: 'latest'
+          gh-token: ${{ github.token }}
+          user: ${{ github.actor }}
+          registry: 'ghcr.io'

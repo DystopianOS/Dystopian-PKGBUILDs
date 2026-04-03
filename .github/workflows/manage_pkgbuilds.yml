@@ -168,7 +168,11 @@ jobs:
             echo "<details><summary>Verification JSON</summary>"
             echo ""
             echo '```json'
-            jq '.' <<< "${VERIFY_OUT:-{}}"
+            if [[ -n "$VERIFY_OUT" ]]; then
+              jq '.' <<< "$VERIFY_OUT"
+            else
+              echo '{}'
+            fi
             echo '```'
             echo "</details>"
           } >> "$GITHUB_STEP_SUMMARY"

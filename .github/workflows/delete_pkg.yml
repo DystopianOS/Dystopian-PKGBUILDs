@@ -38,23 +38,23 @@ jobs:
           private-key: ${{ secrets.DYSTOPIANBOT_KEY }}
 
       - name: Checkout PKGBUILDs repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          submodules: 'true'
 
       - name: Import GPG key
         id: gpg_import
-        uses: ./gpg-import
-        env:
-          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+        uses: DCx7C5/actions/gpg-import@v1
         with:
-          method: 'inline'
-          gpg_key: ${{ secrets.GPG_PRIVATE_KEY }}
-          gpg_pass: ${{ secrets.GPG_PASSPHRASE }}
-          delete_after_import: 'true'
-          configure_git: 'true'
-          setup_home: 'true'
-          preset_pass: 'true'
+          import-method: 'inline'
+          key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-pass: ${{ secrets.GPG_PASSPHRASE }}
+          delete-after-import: 'true'
+          configure-git: 'true'
+          initialize-home: 'true'
+          preset-passphrase-cache: 'false'
+          gh-token: ${{ steps.app_token.outputs.token }}
 
       - name: Remove package directory
         id: delete_pkg
@@ -74,5 +74,5 @@ jobs:
         uses: DCx7C5/actions/git-push-changes@v1
         with:
           repository: '${{ github.repository }}'
-          github_token: ${{ github.token }}
+          gh-token: ${{ github.token }}
           ref: '${{ github.ref_name }}'

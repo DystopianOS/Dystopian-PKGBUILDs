@@ -32,16 +32,15 @@ jobs:
       - name: Import GPG key
         id: gpg_import
         uses: DCx7C5/actions/gpg-import@v1
-        env:
-          GH_TOKEN: ${{ steps.app_token.outputs.token }}
         with:
-          method: 'inline'
-          gpg_home: ${{ format('{0}/.gnupg', github.workspace) }}
-          gpg_key: ${{ secrets.GPG_PACKAGER_PRIVATE_KEY }}
-          gpg_pass: ${{ secrets.GPG_PACKAGER_PASSPHRASE }}
-          configure_git: 'true'
-          setup_home: 'true'
-          preset_pass: 'false'
+          import-method: 'inline'
+          key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-pass: ${{ secrets.GPG_PASSPHRASE }}
+          delete-after-import: 'true'
+          configure-git: 'true'
+          initialize-home: 'true'
+          preset-passphrase-cache: 'false'
+          gh-token: ${{ steps.app_token.outputs.token }}
 
       - name: Build Docker image
         id: build_image

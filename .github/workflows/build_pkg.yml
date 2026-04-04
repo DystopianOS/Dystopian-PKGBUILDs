@@ -26,23 +26,22 @@ jobs:
           private-key: ${{ secrets.DYSTOPIANBOT_KEY }}
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Import GPG key
         id: gpg_import
-        uses: ./gpg-import
-        env:
-          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+        uses: DCx7C5/actions/gpg-import@v1
         with:
-          method: 'inline'
-          gpg_key: ${{ secrets.GPG_PRIVATE_KEY }}
-          gpg_pass: ${{ secrets.GPG_PASSPHRASE }}
-          delete_after_import: 'true'
-          configure_git: 'true'
-          setup_home: 'true'
-          preset_pass: 'true'
+          import-method: 'inline'
+          key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-pass: ${{ secrets.GPG_PASSPHRASE }}
+          delete-after-import: 'true'
+          configure-git: 'true'
+          initialize-home: 'true'
+          preset-passphrase-cache: 'true'
+          gh-token: ${{ steps.app_token.outputs.token }}
 
       - name: Build package
         id: build
@@ -52,4 +51,4 @@ jobs:
           gpg_sign: true
           gpg_key_id: ${{ secrets.GPG_PACKAGER_KEY_ID }}
           gpg_passhphrase: ${{ secrets.GPG_PACKAGER_PASSPHRASE }}
-          github_token: ${{ steps.app_token.outputs.token }}
+          gh-token: ${{ steps.app_token.outputs.token }}

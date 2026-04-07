@@ -16,3 +16,13 @@ dist/
 *.sha512
 
 .ci/
+.claude/
+CLAUDE.md
+AGENTS.md
+AGENT.md
+AGENT-*.md
+AGENT-*.yaml
+AGENT-*.yml
+AGENT-*.json
+AGENT-*.log
+AGENT-*.env

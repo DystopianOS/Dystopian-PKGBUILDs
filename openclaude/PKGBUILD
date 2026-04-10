@@ -1,0 +1,62 @@
+# Maintainer: Your Name <you@example.com>
+pkgname=openclaude
+pkgver=0.1.7
+pkgrel=1
+pkgdesc="Open-source Claude Code agent – community port of the leaked Anthropic Claude Code"
+arch=('x86_64' 'aarch64')
+url="https://github.com/Gitlawb/openclaude"
+license=('MIT')
+depends=('nodejs' 'ripgrep')
+makedepends=('bun')
+optdepends=('ollama: Run fully local models')
+provides=('openclaude')
+conflicts=('openclaude-git')
+source=("openclaude-${pkgver}.tar.gz::https://github.com/Gitlawb/openclaude/archive/refs/tags/v${pkgver}.tar.gz")
+sha256sums=('SKIP')
+
+options=(!strip)
+
+prepare() {
+  cd "${srcdir}/openclaude-${pkgver}"
+  bun install --frozen-lockfile
+}
+
+build() {
+  cd "${srcdir}/openclaude-${pkgver}"
+  bun run build
+}
+
+package() {
+  cd "${srcdir}/openclaude-${pkgver}"
+
+  # Ensure target directories exist
+  mkdir -p "${pkgdir}/usr/bin"
+  mkdir -p "${pkgdir}/usr/lib/openclaude"
+
+  # Create proper wrapper script
+  cat > "${pkgdir}/usr/bin/openclaude" << 'EOF'
+#!/bin/sh
+NODE_PATH="/usr/lib/openclaude/node_modules" exec node "/usr/lib/openclaude/cli.mjs" "$@"
+EOF
+
+  chmod +x "${pkgdir}/usr/bin/openclaude"
+
+  # Install the actual built file
+  install -Dm755 dist/cli.mjs "${pkgdir}/usr/lib/openclaude/cli.mjs"
+
+  set -x
+  echo "DEBUG: srcdir node_modules Inhalt vor Kopie:"
+  ls -l "${srcdir}/openclaude-${pkgver}/node_modules" || echo "NICHT GEFUNDEN"
+  # Copy node_modules for runtime dependencies (robust, auch für Symlinks)
+  cp -a "${srcdir}/openclaude-${pkgver}/node_modules" "${pkgdir}/usr/lib/openclaude/"
+  echo "DEBUG: pkgdir node_modules Inhalt nach Kopie:"
+  ls -l "${pkgdir}/usr/lib/openclaude/node_modules" || echo "node_modules nicht kopiert!"
+  set +x
+
+  # License and docs
+  install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE" 2>/dev/null || true
+  install -Dm644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md" 2>/dev/null || true
+
+  # Entferne versehentlich im Paketverzeichnis abgelegte Metadaten-Dateien
+  rm -f "${pkgdir}/.BUILDINFO" "${pkgdir}/.MTREE" "${pkgdir}/.PKGINFO"
+}

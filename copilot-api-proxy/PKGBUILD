@@ -1,0 +1,47 @@
+# Maintainer: OpenClaude Team
+pkgname=copilot-api-proxy
+pkgver=2.0.1
+pkgrel=4
+pkgdesc="OpenClaude / Claude Code GitHub Copilot + xAI Grok Proxy (Direct TLS)"
+arch=('any')
+url="https://github.com/dcx7c5/copilot-api-proxy"
+license=('MIT')
+depends=('python>=3.11' 'openssl' 'uv')
+makedepends=('uv')
+options=(!emptydirs)
+backup=('etc/copilot-api-proxy/config.env')
+install=copilot-api-proxy.install
+
+source=("git+https://github.com/dcx7c5/copilot-api-proxy.git")
+sha256sums=('SKIP')
+
+prepare() {
+  cd "${srcdir}/${pkgname}"
+  # requirements.txt aus dem Lock-File generieren:
+  # --no-emit-project verhindert den "copilot-api-proxy @ file://$srcdir/..." Eintrag,
+  # der sonst die "$srcdir"-Warnung von makepkg auslöst.
+  uv export --frozen --no-hashes --no-emit-project --format requirements-txt \
+    -o requirements.txt
+}
+
+package() {
+  cd "${srcdir}/${pkgname}"
+
+  install -d -m755 "${pkgdir}/usr/lib/${pkgname}"
+  install -d -m755 "${pkgdir}/usr/lib/${pkgname}/templates"
+  install -d -m755 "${pkgdir}/etc/${pkgname}"
+  install -d -m755 "${pkgdir}/etc/ssl/copilot-api-proxy"
+  install -d -m755 "${pkgdir}/var/lib/${pkgname}"
+  install -d -m755 "${pkgdir}/var/log/${pkgname}"
+
+  install -Dm755 copilot-proxy-wrapper "${pkgdir}/usr/bin/copilot-api-proxy"
+  install -Dm644 main.py config.py requirements.txt pyproject.toml "${pkgdir}/usr/lib/${pkgname}/"
+  cp -r templates/* "${pkgdir}/usr/lib/${pkgname}/templates/"
+
+  install -Dm644 copilot-api-proxy.service "${pkgdir}/usr/lib/systemd/system/${pkgname}.service"
+  install -Dm644 config.env "${pkgdir}/etc/${pkgname}/config.env"
+
+  # Python-Bytecode-Artefakte entfernen, damit keine $srcdir-Pfade im Paket landen
+  find "${pkgdir}" -name "*.pyc" -delete
+  find "${pkgdir}" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+}

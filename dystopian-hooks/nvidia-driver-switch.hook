@@ -1,0 +1,21 @@
+[Trigger]
+Operation = Upgrade
+Type = Package
+Target = linux
+Target = linux-hardened
+Target = linux-lts
+Target = linux-zen
+Target = linux-cachyos*
+Target = linux-cacule*
+Target = nvidia
+Target = nvidia-dkms
+Target = nvidia-*xx-dkms
+Target = nvidia-*xx
+Target = nvidia-*lts-dkms
+Target = nvidia*-lts
+
+[Action]
+Description = Auto-switch NVIDIA driver mode (built-in kernel vs LKM)
+When = PostTransaction
+NeedsTargets
+Exec = /usr/local/bin/nvidia-driver-switch

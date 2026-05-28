@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# NVIDIA driver mode switcher for Dystopian
+# Automatically switches between NVIDIA LKM and built-in kernel driver
+
+set -e
+
+if [ "$(id -u)" -ne 0 ]; then
+  echo "Error: nvidia-driver-switch must run as root" >&2
+  exit 1
+fi
+
+GRUB_CONFIG="/etc/default/grub"
+NVIDIA_BLACKLIST="modprobe.blacklist=nvidia,nvidia_uvm,nvidia_drm"
+
+# Detect current kernel
+detect_kernel() {
+  if pacman -Q linux-nvidia-driver 2>/dev/null | grep -q linux-nvidia; then
+    echo "nvidia-builtin"
+  elif pacman -Q nvidia-dkms 2>/dev/null | grep -q nvidia-dkms; then
+    echo "nvidia-lkm"
+  else
+    echo "none"
+  fi
+}
+
+# Update GRUB config
+update_grub_cmdline() {
+  local mode="$1"
+  
+  if [ ! -f "$GRUB_CONFIG" ]; then
+    echo "Warning: $GRUB_CONFIG not found" >&2
+    return 1
+  fi
+
+  if [ "$mode" = "nvidia-builtin" ]; then
+    # Remove blacklist if present
+    sed -i 's/ *'"$NVIDIA_BLACKLIST"'//g' "$GRUB_CONFIG"
+    echo "✓ NVIDIA built-in kernel driver enabled (blacklist removed)"
+  elif [ "$mode" = "nvidia-lkm" ]; then
+    # Add blacklist if not present
+    if ! grep -q "$NVIDIA_BLACKLIST" "$GRUB_CONFIG"; then
+      sed -i "s/GRUB_CMDLINE_LINUX=\"/GRUB_CMDLINE_LINUX=\"$NVIDIA_BLACKLIST /" "$GRUB_CONFIG"
+      echo "✓ NVIDIA LKM driver enabled (built-in blacklisted)"
+    fi
+  fi
+
+  # Regenerate GRUB config
+  if command -v grub-mkconfig &>/dev/null; then
+    grub-mkconfig -o /boot/grub/grub.cfg 2>/dev/null || true
+  fi
+}
+
+# Main
+CURRENT_MODE=$(detect_kernel)
+
+case "$CURRENT_MODE" in
+  nvidia-builtin)
+    update_grub_cmdline "nvidia-builtin"
+    ;;
+  nvidia-lkm)
+    update_grub_cmdline "nvidia-lkm"
+    ;;
+  none)
+    # No NVIDIA driver detected, clean up any leftover config
+    if grep -q "$NVIDIA_BLACKLIST" "$GRUB_CONFIG" 2>/dev/null; then
+      sed -i 's/ *'"$NVIDIA_BLACKLIST"'//g' "$GRUB_CONFIG"
+      grub-mkconfig -o /boot/grub/grub.cfg 2>/dev/null || true
+      echo "ℹ NVIDIA driver not found, cleaned up GRUB config"
+    fi
+    ;;
+esac
+
+exit 0

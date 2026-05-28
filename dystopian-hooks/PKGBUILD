@@ -31,8 +31,10 @@ package() {
   install -Dm644 dystopian-nvidia.hook "$pkgdir/usr/share/libalpm/hooks/dystopian-nvidia.hook"
   install -Dm644 dystopian-plymouth-initramfs.hook "$pkgdir/usr/share/libalpm/hooks/dystopian-plymouth-initramfs.hook"
   install -Dm644 dystopian-reboot-required.hook "$pkgdir/usr/share/libalpm/hooks/dystopian-reboot-required.hook"
+  install -Dm644 nvidia-driver-switch.hook "$pkgdir/usr/share/libalpm/hooks/nvidia-driver-switch.hook"
   install -Dm755 dystopian-reboot-required "$pkgdir/usr/share/libalpm/scripts/dystopian-reboot-required"
   install -Dm755 update-initramfs "$pkgdir/usr/bin/update-initramfs"
+  install -Dm755 nvidia-driver-switch "$pkgdir/usr/local/bin/nvidia-driver-switch"
 }
 
 # vim:set ts=8 sts=2 sw=2 et:

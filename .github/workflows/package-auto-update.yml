@@ -1,0 +1,536 @@
+name: Package Auto-Update System
+
+on:
+  schedule:
+    # Run every 6 hours to check for updates
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      package_filter:
+        description: 'Package name filter (regex pattern, optional)'
+        required: false
+        default: ''
+      force_update:
+        description: 'Force update even if no changes detected'
+        required: false
+        default: false
+        type: boolean
+      dry_run:
+        description: 'Dry run - show what would be updated without making changes'
+        required: false
+        default: false
+        type: boolean
+      use_semantic_versioning:
+        description: 'Use semantic versioning for package updates'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  DEBIAN_FRONTEND: noninteractive
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  detect-packages:
+    runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.scan-packages.outputs.packages }}
+      matrix: ${{ steps.generate-matrix.outputs.matrix }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y jq curl git python3 python3-pip nodejs npm golang-go
+        pip3 install packaging requests pyyaml
+
+    - name: Scan for packages
+      id: scan-packages
+      run: |
+        #!/bin/bash
+        set -euo pipefail
+
+        echo "🔍 Scanning for packages in repository..."
+
+        packages_json="[]"
+
+        # Function to detect package type and metadata
+        detect_package_info() {
+          local pkg_dir="$1"
+          local pkg_name=$(basename "$pkg_dir")
+          local pkg_type="unknown"
+          local source_url=""
+          local current_version=""
+          local update_method=""
+          local build_method=""
+
+          echo "📦 Analyzing package: $pkg_name in $pkg_dir"
+
+          # Read PKGBUILD if it exists
+          if [[ -f "$pkg_dir/PKGBUILD" ]]; then
+            source "$pkg_dir/PKGBUILD" 2>/dev/null || true
+
+            # Extract source URL and determine package type
+            if [[ -n "${source:-}" ]]; then
+              for src in "${source[@]}"; do
+                if [[ "$src" =~ git\+(.*)\.git ]] || [[ "$src" =~ ::git\+(.*) ]]; then
+                  source_url=$(echo "$src" | sed -E 's/.*git\+([^#]+).*/\1/' | sed 's/\.git$//')
+                  pkg_type="git"
+                  update_method="git-commit"
+                  break
+                elif [[ "$src" =~ https?://github\.com/([^/]+)/([^/]+) ]]; then
+                  source_url=$(echo "$src" | sed -E 's|.*https?://(github\.com/[^/]+/[^/]+).*|\1|' | sed 's|\.git$||')
+                  source_url="https://$source_url"
+                  pkg_type="github"
+                  update_method="github-release"
+                  break
+                elif [[ "$src" =~ https?://.*\.tar\.gz ]] || [[ "$src" =~ https?://.*\.tar\.xz ]]; then
+                  source_url="$src"
+                  pkg_type="tarball"
+                  update_method="version-check"
+                  break
+                fi
+              done
+            fi
+
+            current_version="${pkgver:-unknown}"
+
+            # Determine build method
+            if grep -q "python" "$pkg_dir/PKGBUILD"; then
+              build_method="python"
+            elif grep -q "node\|npm\|yarn" "$pkg_dir/PKGBUILD"; then
+              build_method="nodejs"
+            elif grep -q "cargo\|rust" "$pkg_dir/PKGBUILD"; then
+              build_method="rust"
+            elif grep -q "go build\|golang" "$pkg_dir/PKGBUILD"; then
+              build_method="go"
+            elif grep -q "cmake\|make" "$pkg_dir/PKGBUILD"; then
+              build_method="cmake"
+            else
+              build_method="generic"
+            fi
+          fi
+
+          # Check for additional configuration files
+          local config_files=()
+          [[ -f "$pkg_dir/package.json" ]] && config_files+=("package.json")
+          [[ -f "$pkg_dir/Cargo.toml" ]] && config_files+=("Cargo.toml")
+          [[ -f "$pkg_dir/go.mod" ]] && config_files+=("go.mod")
+          [[ -f "$pkg_dir/pyproject.toml" ]] && config_files+=("pyproject.toml")
+          [[ -f "$pkg_dir/setup.py" ]] && config_files+=("setup.py")
+
+          # Check if it's a submodule
+          local is_submodule=false
+          if git submodule status "$pkg_dir" 2>/dev/null | grep -q "^[^ ]"; then
+            is_submodule=true
+            update_method="submodule-update"
+          fi
+
+          # Add package to JSON array
+          local package_info=$(jq -n \
+            --arg name "$pkg_name" \
+            --arg type "$pkg_type" \
+            --arg dir "$pkg_dir" \
+            --arg source_url "$source_url" \
+            --arg current_version "$current_version" \
+            --arg update_method "$update_method" \
+            --arg build_method "$build_method" \
+            --argjson config_files "$(printf '%s\n' "${config_files[@]}" | jq -R . | jq -s .)" \
+            --argjson is_submodule "$is_submodule" \
+            '{
+              name: $name,
+              type: $type,
+              directory: $dir,
+              source_url: $source_url,
+              current_version: $current_version,
+              update_method: $update_method,
+              build_method: $build_method,
+              config_files: $config_files,
+              is_submodule: $is_submodule,
+              last_checked: (now | todate)
+            }')
+
+          packages_json=$(echo "$packages_json" | jq ". += [$package_info]")
+        }
+
+        # Find all directories with PKGBUILD files
+        while IFS= read -r -d '' pkg_dir; do
+          pkg_dir=$(dirname "$pkg_dir")
+
+          # Apply package filter if provided
+          if [[ -n "${{ inputs.package_filter }}" ]]; then
+            pkg_name=$(basename "$pkg_dir")
+            if ! [[ "$pkg_name" =~ ${{ inputs.package_filter }} ]]; then
+              echo "⏭️  Skipping $pkg_name (doesn't match filter)"
+              continue
+            fi
+          fi
+
+          detect_package_info "$pkg_dir"
+        done < <(find . -name "PKGBUILD" -print0)
+
+        echo "📊 Found $(echo "$packages_json" | jq length) packages"
+        echo "packages=$packages_json" >> $GITHUB_OUTPUT
+
+    - name: Generate update matrix
+      id: generate-matrix
+      run: |
+        packages='${{ steps.scan-packages.outputs.packages }}'
+
+        # Filter packages that need checking
+        matrix=$(echo "$packages" | jq -c '{
+          include: [
+            .[] | select(.source_url != "" and .source_url != null) | {
+              name: .name,
+              directory: .directory,
+              type: .type,
+              source_url: .source_url,
+              current_version: .current_version,
+              update_method: .update_method,
+              build_method: .build_method,
+              is_submodule: .is_submodule
+            }
+          ]
+        }')
+
+        echo "matrix=$matrix" >> $GITHUB_OUTPUT
+        echo "📋 Generated matrix with $(echo "$matrix" | jq '.include | length') packages to check"
+
+  update-packages:
+    needs: detect-packages
+    if: needs.detect-packages.outputs.matrix != '{"include":[]}'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix: ${{ fromJson(needs.detect-packages.outputs.matrix) }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        submodules: recursive
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Setup update environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y curl jq git python3 python3-pip
+        pip3 install packaging requests
+
+    - name: Get current package version
+      id: current-version
+      uses: DCx7C5/actions/aur-get-version@v1
+      with:
+        pkg-name: ${{ matrix.name }}
+      continue-on-error: true
+
+    - name: Check for updates - ${{ matrix.name }}
+      id: check-update
+      run: |
+        #!/bin/bash
+        set -euo pipefail
+
+        package_name="${{ matrix.name }}"
+        package_dir="${{ matrix.directory }}"
+        source_url="${{ matrix.source_url }}"
+        current_version="${{ steps.current-version.outputs.pkg_ver || matrix.current_version }}"
+        update_method="${{ matrix.update_method }}"
+        is_submodule="${{ matrix.is_submodule }}"
+
+        echo "🔍 Checking for updates: $package_name"
+        echo "📁 Directory: $package_dir"
+        echo "🔗 Source: $source_url"
+        echo "📦 Current version: $current_version"
+        echo "🔄 Update method: $update_method"
+
+        needs_update=false
+        new_version=""
+        update_type=""
+        commit_hash=""
+
+        cd "$package_dir"
+
+        case "$update_method" in
+          "github-release")
+            echo "🎯 Checking GitHub releases..."
+            repo_path=$(echo "$source_url" | sed 's|https://github.com/||')
+
+            # Check for latest release
+            latest_release=$(curl -s "https://api.github.com/repos/$repo_path/releases/latest" | jq -r '.tag_name // empty')
+            if [[ -n "$latest_release" ]]; then
+              clean_release=$(echo "$latest_release" | sed 's/^v//')
+              if [[ "$clean_release" != "$current_version" ]]; then
+                needs_update=true
+                new_version="$clean_release"
+                update_type="release"
+                echo "🎉 New release found: $latest_release"
+              fi
+            else
+              # Fallback to latest tag using Dystopian action
+              repo_owner=$(echo "$repo_path" | cut -d'/' -f1)
+              repo_name=$(echo "$repo_path" | cut -d'/' -f2)
+              echo "latest_tag_repo=${repo_owner}/${repo_name}" >> $GITHUB_OUTPUT
+              echo "check_tags=true" >> $GITHUB_OUTPUT
+            fi
+            ;;
+
+          "git-commit")
+            echo "🔄 Checking git commits..."
+            repo_path=$(echo "$source_url" | sed 's|https://github.com/||')
+            latest_commit=$(curl -s "https://api.github.com/repos/$repo_path/commits" | jq -r '.[0].sha[0:7]')
+
+            if [[ -n "$latest_commit" ]]; then
+              # Generate new version with current date and commit
+              current_date=$(date +%Y.%m.%d)
+              commit_count=$(curl -s "https://api.github.com/repos/$repo_path/commits?per_page=1" | jq -r 'length')
+              new_git_version="${current_date}.r${commit_count}.${latest_commit}"
+
+              if [[ "$new_git_version" != "$current_version" ]]; then
+                needs_update=true
+                new_version="$new_git_version"
+                commit_hash="$latest_commit"
+                update_type="git"
+                echo "📅 New git version: $new_git_version"
+              fi
+            fi
+            ;;
+
+          "submodule-update")
+            echo "📦 Checking submodule updates..."
+            if git submodule update --remote "$package_dir" 2>/dev/null; then
+              if git diff --quiet HEAD -- "$package_dir"; then
+                echo "📌 Submodule is up to date"
+              else
+                needs_update=true
+                new_version="$(date +%Y.%m.%d)-submodule-update"
+                update_type="submodule"
+                echo "🔄 Submodule has updates"
+              fi
+            fi
+            ;;
+
+          *)
+            echo "⚠️  Unknown update method: $update_method"
+            ;;
+        esac
+
+        if [[ "$needs_update" == "true" ]] || [[ "${{ inputs.force_update }}" == "true" ]]; then
+          echo "✅ Update needed for $package_name"
+          echo "needs_update=true" >> $GITHUB_OUTPUT
+          echo "new_version=$new_version" >> $GITHUB_OUTPUT
+          echo "update_type=$update_type" >> $GITHUB_OUTPUT
+          echo "commit_hash=$commit_hash" >> $GITHUB_OUTPUT
+        else
+          echo "📌 $package_name is up to date"
+          echo "needs_update=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Get latest tag (fallback)
+      if: steps.check-update.outputs.check_tags == 'true'
+      id: get-latest-tag
+      uses: DCx7C5/actions/tag-get-latest@v1
+      with:
+        repository: ${{ steps.check-update.outputs.latest_tag_repo }}
+      continue-on-error: true
+
+    - name: Check tag update
+      if: steps.get-latest-tag.outputs.tag_name != '' && steps.get-latest-tag.outputs.tag_name != 'null'
+      id: tag-update
+      run: |
+        latest_tag="${{ steps.get-latest-tag.outputs.tag_name }}"
+        current_version="${{ steps.current-version.outputs.pkg_ver || matrix.current_version }}"
+
+        clean_tag=$(echo "$latest_tag" | sed 's/^v//')
+        if [[ "$clean_tag" != "$current_version" ]]; then
+          echo "🏷️  New tag found: $latest_tag"
+          echo "needs_update=true" >> $GITHUB_OUTPUT
+          echo "new_version=$clean_tag" >> $GITHUB_OUTPUT
+          echo "update_type=tag" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Get semantic next version
+      if: inputs.use_semantic_versioning == true && (steps.check-update.outputs.needs_update == 'true' || steps.tag-update.outputs.needs_update == 'true')
+      id: semantic-version
+      uses: thenativeweb/get-next-version@main
+      with:
+        prefix: v
+      continue-on-error: true
+
+    - name: Determine final version
+      id: final-version
+      run: |
+        # Priority: check-update > tag-update > semantic versioning
+        if [[ "${{ steps.check-update.outputs.needs_update }}" == "true" ]]; then
+          echo "new_version=${{ steps.check-update.outputs.new_version }}" >> $GITHUB_OUTPUT
+          echo "update_type=${{ steps.check-update.outputs.update_type }}" >> $GITHUB_OUTPUT
+          echo "commit_hash=${{ steps.check-update.outputs.commit_hash }}" >> $GITHUB_OUTPUT
+          echo "needs_update=true" >> $GITHUB_OUTPUT
+        elif [[ "${{ steps.tag-update.outputs.needs_update }}" == "true" ]]; then
+          echo "new_version=${{ steps.tag-update.outputs.new_version }}" >> $GITHUB_OUTPUT
+          echo "update_type=${{ steps.tag-update.outputs.update_type }}" >> $GITHUB_OUTPUT
+          echo "needs_update=true" >> $GITHUB_OUTPUT
+        elif [[ "${{ steps.semantic-version.outputs.version }}" != "" ]] && [[ "${{ inputs.use_semantic_versioning }}" == "true" ]]; then
+          semantic_version=$(echo "${{ steps.semantic-version.outputs.version }}" | sed 's/^v//')
+          echo "new_version=$semantic_version" >> $GITHUB_OUTPUT
+          echo "update_type=semantic" >> $GITHUB_OUTPUT
+          echo "needs_update=true" >> $GITHUB_OUTPUT
+        else
+          echo "needs_update=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Update PKGBUILD - ${{ matrix.name }}
+      if: steps.final-version.outputs.needs_update == 'true' && inputs.dry_run != true
+      run: |
+        #!/bin/bash
+        set -euo pipefail
+
+        package_dir="${{ matrix.directory }}"
+        new_version="${{ steps.final-version.outputs.new_version }}"
+        update_type="${{ steps.final-version.outputs.update_type }}"
+        commit_hash="${{ steps.final-version.outputs.commit_hash }}"
+
+        cd "$package_dir"
+
+        echo "📝 Updating PKGBUILD for ${{ matrix.name }}..."
+
+        # Backup original
+        cp PKGBUILD PKGBUILD.backup
+
+        # Update pkgver
+        sed -i "s/^pkgver=.*/pkgver=$new_version/" PKGBUILD
+
+        # Reset pkgrel to 1 for version bumps
+        if [[ "$update_type" != "submodule" ]]; then
+          sed -i "s/^pkgrel=.*/pkgrel=1/" PKGBUILD
+        fi
+
+        # Update commit hash if applicable
+        if [[ -n "$commit_hash" ]] && grep -q "^_commit=" PKGBUILD; then
+          sed -i "s/^_commit=.*/_commit=$commit_hash/" PKGBUILD
+        fi
+
+        # Set checksums to SKIP initially
+        if grep -q "^sha256sums=" PKGBUILD; then
+          sed -i "s/^sha256sums=.*/sha256sums=('SKIP')/" PKGBUILD
+        fi
+
+        echo "✅ PKGBUILD updated successfully"
+
+    - name: Update checksums
+      if: steps.final-version.outputs.needs_update == 'true' && inputs.dry_run != true
+      uses: DCx7C5/actions/aur-updpkgsums@v1
+      with:
+        pkg_name: ${{ matrix.name }}
+      continue-on-error: true
+
+    - name: Validate package
+      if: steps.final-version.outputs.needs_update == 'true' && inputs.dry_run != true
+      uses: DCx7C5/actions/aur-validate-pkg@v1
+      with:
+        pkg_name: ${{ matrix.name }}
+        run_namcap: true
+        verify_sources: true
+      continue-on-error: true
+
+    - name: Stage changes
+      if: steps.final-version.outputs.needs_update == 'true' && inputs.dry_run != true
+      uses: DCx7C5/actions/git-stage-changes@v1
+      with:
+        paths: ${{ matrix.directory }}/PKGBUILD
+
+    - name: Commit changes - ${{ matrix.name }}
+      if: steps.final-version.outputs.needs_update == 'true' && inputs.dry_run != true
+      uses: DCx7C5/actions/git-commit@v1
+      with:
+        message: |
+          ${{ steps.final-version.outputs.update_type == 'release' && format('feat({0}): update to release {1}', matrix.name, steps.final-version.outputs.new_version) ||
+              steps.final-version.outputs.update_type == 'tag' && format('feat({0}): update to tag {1}', matrix.name, steps.final-version.outputs.new_version) ||
+              steps.final-version.outputs.update_type == 'git' && format('chore({0}): update to git {1}', matrix.name, steps.final-version.outputs.new_version) ||
+              steps.final-version.outputs.update_type == 'semantic' && format('feat({0}): bump to {1}', matrix.name, steps.final-version.outputs.new_version) ||
+              steps.final-version.outputs.update_type == 'submodule' && format('chore({0}): update submodule', matrix.name) ||
+              format('chore({0}): update to {1}', matrix.name, steps.final-version.outputs.new_version) }}
+
+          Automated update by Dystopian package monitoring system
+
+          - Package: ${{ matrix.name }}
+          - Update type: ${{ steps.final-version.outputs.update_type }}
+          - Previous version: ${{ steps.current-version.outputs.pkg_ver || matrix.current_version }}
+          - New version: ${{ steps.final-version.outputs.new_version }}
+          ${{ steps.final-version.outputs.commit_hash && format('- Commit: {0}', steps.final-version.outputs.commit_hash) || '' }}
+        skip-if-no-changes: true
+        signoff: false
+
+  push-changes:
+    needs: [detect-packages, update-packages]
+    if: always() && needs.update-packages.result == 'success'
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Pull and push all changes
+      uses: DCx7C5/actions/git-push-changes@v1
+      with:
+        message: "chore: sync package updates from automated workflow"
+        force-push: false
+        create-pr: false
+
+  create-summary:
+    needs: [detect-packages, update-packages]
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Generate workflow summary
+      run: |
+        echo "## 📦 Package Update Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        if [[ "${{ inputs.dry_run }}" == "true" ]]; then
+          echo "🧪 **DRY RUN MODE** - No changes were made" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        packages='${{ needs.detect-packages.outputs.packages }}'
+        total_packages=$(echo "$packages" | jq length)
+
+        echo "📊 **Scan Results**:" >> $GITHUB_STEP_SUMMARY
+        echo "- Total packages detected: $total_packages" >> $GITHUB_STEP_SUMMARY
+
+        if [[ -n "${{ inputs.package_filter }}" ]]; then
+          echo "- Package filter applied: \`${{ inputs.package_filter }}\`" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Package Types Distribution" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        echo "$packages" | jq -r '
+          group_by(.type) |
+          map({type: .[0].type, count: length}) |
+          .[] |
+          "\(.type): \(.count)"
+        ' >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Update Methods" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        echo "$packages" | jq -r '
+          group_by(.update_method) |
+          map({method: .[0].update_method, count: length}) |
+          .[] |
+          "\(.method): \(.count)"
+        ' >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

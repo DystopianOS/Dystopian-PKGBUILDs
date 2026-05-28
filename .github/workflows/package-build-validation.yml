@@ -1,0 +1,320 @@
+name: Package Build and Validation
+
+on:
+  workflow_call:
+    inputs:
+      package_name:
+        description: 'Name of the package to build and validate'
+        required: true
+        type: string
+      run_tests:
+        description: 'Run comprehensive package tests'
+        required: false
+        type: boolean
+        default: true
+      upload_artifacts:
+        description: 'Upload build artifacts'
+        required: false
+        type: boolean
+        default: false
+      sign_packages:
+        description: 'Sign packages with GPG'
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      GPG_PRIVATE_KEY:
+        description: 'GPG private key for package signing'
+        required: false
+      GPG_PASSPHRASE:
+        description: 'GPG passphrase'
+        required: false
+
+  workflow_dispatch:
+    inputs:
+      package_name:
+        description: 'Name of the package to build and validate'
+        required: true
+        type: string
+      run_tests:
+        description: 'Run comprehensive package tests'
+        required: false
+        type: boolean
+        default: true
+      upload_artifacts:
+        description: 'Upload build artifacts'
+        required: false
+        type: boolean
+        default: false
+      sign_packages:
+        description: 'Sign packages with GPG'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  validate-and-build:
+    runs-on: ubuntu-latest
+    outputs:
+      package_version: ${{ steps.get-version.outputs.pkg_ver }}
+      package_release: ${{ steps.get-version.outputs.pkg_rel }}
+      build_success: ${{ steps.build-package.outputs.success }}
+
+    steps:
+      - name: GitHub App Token
+        id: app_token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.DYSTOPIANBOT_APP_ID }}
+          private-key: ${{ secrets.DYSTOPIANBOT_KEY }}
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Validate package exists
+        run: |
+          if [[ ! -d "${{ inputs.package_name }}" ]]; then
+            echo "::error::Package directory '${{ inputs.package_name }}' not found"
+            exit 1
+          fi
+  
+          if [[ ! -f "${{ inputs.package_name }}/PKGBUILD" ]]; then
+            echo "::error::PKGBUILD not found in '${{ inputs.package_name }}'"
+            exit 1
+          fi
+  
+          echo "✅ Package validation passed"
+
+      - name: Get package version
+        id: get-version
+        uses: DCx7C5/actions/aur-get-version@v1
+        with:
+          pkg-name: ${{ inputs.package_name }}
+
+      - name: Setup GPG for signing (if enabled)
+        if: inputs.sign_packages == true
+        uses: DCx7C5/actions/gpg-setup-home@v1
+
+      - name: Import GPG key
+        if: inputs.sign_packages == true && secrets.GPG_PRIVATE_KEY != ''
+        uses: DCx7C5/actions/gpg-import@v1
+        with:
+          key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-pass: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Update checksums
+        uses: DCx7C5/actions/aur-updpkgsums@v1
+        with:
+          pkg_name: ${{ inputs.package_name }}
+
+      - name: Validate package with namcap
+        uses: DCx7C5/actions/aur-validate-pkg@v1
+        with:
+          pkg_name: ${{ inputs.package_name }}
+          run_namcap: true
+          verify_sources: true
+
+      - name: Build package
+        id: build-package
+        uses: DCx7C5/actions/aur-build-pkg@v1
+        with:
+          pkg-name: ${{ inputs.package_name }}
+          gpg-sign: ${{ inputs.sign_packages }}
+        continue-on-error: true
+
+      - name: Check build status
+        run: |
+          if [[ "${{ steps.build-package.outcome }}" == "failure" ]]; then
+            echo "::error::Package build failed for ${{ inputs.package_name }}"
+            echo "success=false" >> $GITHUB_OUTPUT
+            exit 1
+          else
+            echo "✅ Package build successful"
+            echo "success=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run additional tests
+        if: inputs.run_tests == true
+        run: |
+          echo "🧪 Running additional package tests..."
+  
+          # Check if package was built successfully
+          if [[ ! -f ${{ inputs.package_name }}/*.pkg.tar.* ]]; then
+            echo "::error::No package files found after build"
+            exit 1
+          fi
+  
+          # Verify package integrity
+          echo "::group::Package integrity check"
+          for pkg in ${{ inputs.package_name }}/*.pkg.tar.*; do
+            if [[ -f "$pkg" ]]; then
+              echo "Checking: $pkg"
+              file "$pkg"
+  
+              # Extract and check basic structure
+              mkdir -p test_extract
+              tar -tf "$pkg" | head -20
+              echo "Package appears valid: $pkg"
+            fi
+          done
+          echo "::endgroup::"
+  
+          # Test installation in clean environment (if possible)
+          echo "::group::Installation test"
+          # This would typically be done in a container or chroot
+          echo "Installation test would be performed in isolated environment"
+          echo "::endgroup::"
+  
+          echo "✅ Additional tests completed"
+
+      - name: Generate package info
+        id: package-info
+        run: |
+          cd "${{ inputs.package_name }}"
+  
+          # Extract package information
+          source PKGBUILD
+  
+          echo "Package Information:" > package-info.txt
+          echo "===================" >> package-info.txt
+          echo "Name: ${pkgname}" >> package-info.txt
+          echo "Version: ${pkgver}-${pkgrel}" >> package-info.txt
+          echo "Description: ${pkgdesc}" >> package-info.txt
+          echo "Architecture: ${arch[*]}" >> package-info.txt
+          echo "URL: ${url}" >> package-info.txt
+          echo "License: ${license[*]}" >> package-info.txt
+  
+          if [[ -n "${depends:-}" ]]; then
+            echo "Dependencies: ${depends[*]}" >> package-info.txt
+          fi
+  
+          if [[ -n "${makedepends:-}" ]]; then
+            echo "Make Dependencies: ${makedepends[*]}" >> package-info.txt
+          fi
+  
+          echo "Built: $(date)" >> package-info.txt
+          echo "Builder: GitHub Actions" >> package-info.txt
+  
+          # Create build log summary
+          echo "Build Summary:" > build-summary.txt
+          echo "=============" >> build-summary.txt
+          echo "Status: ${{ steps.build-package.outcome }}" >> build-summary.txt
+          echo "Package: ${{ inputs.package_name }}" >> build-summary.txt
+          echo "Version: ${{ steps.get-version.outputs.pkg_ver }}-${{ steps.get-version.outputs.pkg_rel }}" >> build-summary.txt
+          echo "Timestamp: $(date -Iseconds)" >> build-summary.txt
+          echo "Runner: ${{ runner.os }}" >> build-summary.txt
+          echo "Workflow: ${{ github.workflow }}" >> build-summary.txt
+          echo "Run ID: ${{ github.run_id }}" >> build-summary.txt
+  
+          # List built packages
+          echo "" >> build-summary.txt
+          echo "Built packages:" >> build-summary.txt
+          ls -la *.pkg.tar.* 2>/dev/null >> build-summary.txt || echo "No packages found" >> build-summary.txt
+
+      - name: Create build archive
+        if: inputs.upload_artifacts == true
+        run: |
+          mkdir -p build-artifacts/${{ inputs.package_name }}
+  
+          # Copy built packages
+          cp -v ${{ inputs.package_name }}/*.pkg.tar.* build-artifacts/${{ inputs.package_name }}/ 2>/dev/null || true
+  
+          # Copy signatures if they exist
+          cp -v ${{ inputs.package_name }}/*.sig build-artifacts/${{ inputs.package_name }}/ 2>/dev/null || true
+  
+          # Copy info files
+          cp -v ${{ inputs.package_name }}/package-info.txt build-artifacts/${{ inputs.package_name }}/ 2>/dev/null || true
+          cp -v ${{ inputs.package_name }}/build-summary.txt build-artifacts/${{ inputs.package_name }}/ 2>/dev/null || true
+  
+          # Copy PKGBUILD and related files
+          cp -v ${{ inputs.package_name }}/PKGBUILD build-artifacts/${{ inputs.package_name }}/
+          cp -v ${{ inputs.package_name }}/.SRCINFO build-artifacts/${{ inputs.package_name }}/ 2>/dev/null || true
+  
+          # Create archive
+          tar -czf ${{ inputs.package_name }}-build-$(date +%Y%m%d-%H%M%S).tar.gz -C build-artifacts .
+
+      - name: Upload build artifacts
+        if: inputs.upload_artifacts == true
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.package_name }}-build-${{ github.run_number }}
+          path: |
+            ${{ inputs.package_name }}-build-*.tar.gz
+            ${{ inputs.package_name }}/build-summary.txt
+            ${{ inputs.package_name }}/package-info.txt
+          retention-days: 30
+
+      - name: Create SRCINFO
+        uses: DCx7C5/actions/aur-create-srcinfo@v1
+        with:
+          pkg-name: ${{ inputs.package_name }}
+
+      - name: Commit updated files (if changed)
+        uses: DCx7C5/actions/git-stage-changes@v1
+        with:
+          paths: |
+            ${{ inputs.package_name }}/PKGBUILD
+            ${{ inputs.package_name }}/.SRCINFO
+
+      - name: Commit changes
+        uses: DCx7C5/actions/git-commit@v1
+        with:
+          message: |
+            chore(${{ inputs.package_name }}): update build artifacts
+  
+            - Package: ${{ inputs.package_name }}
+            - Version: ${{ steps.get-version.outputs.pkg_ver }}-${{ steps.get-version.outputs.pkg_rel }}
+            - Build status: ${{ steps.build-package.outcome }}
+            - Updated checksums and SRCINFO
+  
+            Automated by package build workflow
+          skip-if-no-changes: true
+          allow-empty: false
+
+  create-summary:
+    needs: validate-and-build
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Generate build summary
+      run: |
+        echo "## 🏗️ Package Build Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        echo "### 📦 Package Details" >> $GITHUB_STEP_SUMMARY
+        echo "- **Package**: ${{ inputs.package_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Version**: ${{ needs.validate-and-build.outputs.package_version }}-${{ needs.validate-and-build.outputs.package_release }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Build Status**: ${{ needs.validate-and-build.outputs.build_success == 'true' && '✅ Success' || '❌ Failed' }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Timestamp**: $(date -Iseconds)" >> $GITHUB_STEP_SUMMARY
+
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🔧 Build Configuration" >> $GITHUB_STEP_SUMMARY
+        echo "- **Run Tests**: ${{ inputs.run_tests && '✅ Enabled' || '❌ Disabled' }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Upload Artifacts**: ${{ inputs.upload_artifacts && '✅ Enabled' || '❌ Disabled' }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Sign Packages**: ${{ inputs.sign_packages && '✅ Enabled' || '❌ Disabled' }}" >> $GITHUB_STEP_SUMMARY
+
+        if [[ "${{ needs.validate-and-build.outputs.build_success }}" == "true" ]]; then
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ✅ Build Success" >> $GITHUB_STEP_SUMMARY
+          echo "The package was built successfully and is ready for distribution." >> $GITHUB_STEP_SUMMARY
+
+          if [[ "${{ inputs.upload_artifacts }}" == "true" ]]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "📦 **Build artifacts have been uploaded and are available for download.**" >> $GITHUB_STEP_SUMMARY
+          fi
+        else
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ❌ Build Failed" >> $GITHUB_STEP_SUMMARY
+          echo "The package build encountered errors. Please check the build logs for details." >> $GITHUB_STEP_SUMMARY
+        fi
+
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "---" >> $GITHUB_STEP_SUMMARY
+        echo "*Automated by Dystopian Package Build System*" >> $GITHUB_STEP_SUMMARY

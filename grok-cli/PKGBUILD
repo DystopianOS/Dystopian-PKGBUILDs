@@ -1,0 +1,132 @@
+# Maintainer: Dystopian <dcxdevelopment at protonmail dot com>
+
+pkgname=grok-cli
+pkgver=1.0.5
+pkgrel=1
+pkgdesc="CLI tool that proxies Anthropic API calls to xAI Grok and launches claude-code"
+arch=('x86_64' 'aarch64')
+url="https://github.com/whitesmith/grok-cli"
+license=('MIT')
+
+depends=(
+  'nodejs>=14'
+  'libsecret'       # Linux backend for keytar (credential storage)
+)
+
+makedepends=(
+  'pnpm'
+  'node-gyp'        # native addon build system
+  'python'          # node-gyp build dependency
+  'gcc'             # native addon compilation (keytar)
+  'pkg-config'      # locates libsecret for keytar build
+)
+
+optdepends=(
+  'claude-code: Anthropic Claude Code CLI agent (required at runtime)'
+)
+
+provides=('grok-cli')
+conflicts=('grok-cli-git')
+options=(!strip)
+
+source=("https://registry.npmjs.org/${pkgname}/-/${pkgname}-${pkgver}.tgz")
+sha256sums=('ebb1dcb34e1c31ecaf9349c049a4444cbb0153dfcf53d357649608b2fc506008')
+b2sums=('015579ce59ab04d12662edf9cee2294492533611f0f3e09ed49db4148de12a54630c8560e104599dd839de05e6bd9f1e124c19ca819e9066d10d3473125bf976')
+noextract=("${pkgname}-${pkgver}.tgz")
+
+prepare() {
+  cd "${srcdir}"
+
+  # npm tarballs extract into a 'package/' directory
+  tar xf "${pkgname}-${pkgver}.tgz"
+  mv package "${pkgname}-${pkgver}"
+
+  cd "${pkgname}-${pkgver}"
+
+  # pnpm v10 blocks install scripts by default; whitelist keytar's
+  # native addon build via pnpm.onlyBuiltDependencies
+  python -c "
+import json, pathlib
+pkg = json.loads(pathlib.Path('package.json').read_text())
+pkg.setdefault('pnpm', {})['onlyBuiltDependencies'] = ['keytar']
+pathlib.Path('package.json').write_text(json.dumps(pkg, indent=2) + '\n')
+"
+}
+
+build() {
+  cd "${srcdir}/${pkgname}-${pkgver}"
+
+  # keytar@7.9.0 native addon requires -fPIC for shared-object linking
+  # on modern Node.js (v25+) / GCC with default -flto
+  export CFLAGS="${CFLAGS:+$CFLAGS }-fPIC"
+  export CXXFLAGS="${CXXFLAGS:+$CXXFLAGS }-fPIC"
+
+  # Install production dependencies; triggers keytar node-gyp build
+  pnpm install \
+    --prod \
+    --no-optional \
+    --frozen-lockfile=false \
+    --shamefully-hoist \
+    --store-dir "${srcdir}/pnpm-store"
+}
+
+package() {
+  cd "${srcdir}/${pkgname}-${pkgver}"
+
+  local _destdir="${pkgdir}/usr/lib/${pkgname}"
+
+  # Install application files
+  install -dm755 "${_destdir}"
+  install -Dm644 index.js   "${_destdir}/index.js"
+  install -Dm644 proxy.js   "${_destdir}/proxy.js"
+  install -Dm644 package.json "${_destdir}/package.json"
+
+  # Install node_modules (preserves native .node bindings)
+  cp -a node_modules "${_destdir}/"
+
+  # Remove pnpm artefacts that embed $srcdir paths
+  rm -f  "${_destdir}/node_modules/.modules.yaml"
+  find "${_destdir}/node_modules" -path '*/.bin' -type d -exec rm -rf {} + 2>/dev/null || true
+  find "${_destdir}/node_modules/.pnpm" -name ".bin" -type d -exec rm -rf {} + 2>/dev/null || true
+
+  # Launcher script
+  install -dm755 "${pkgdir}/usr/bin"
+  cat > "${pkgdir}/usr/bin/grok" << 'LAUNCHER'
+#!/bin/sh
+# grok-cli — xAI Grok proxy for claude-code
+exec node /usr/lib/grok-cli/index.js "$@"
+LAUNCHER
+  chmod 755 "${pkgdir}/usr/bin/grok"
+
+  # License
+  install -Dm644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+
+  # The npm registry metadata confirms MIT; install a synthetic LICENSE
+  install -dm755 "${pkgdir}/usr/share/licenses/${pkgname}"
+  cat > "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE" << 'EOF'
+MIT License
+
+Copyright (c) Whitesmith
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+EOF
+}
+
+# vim:set ts=2 sts=2 sw=2 et:
+

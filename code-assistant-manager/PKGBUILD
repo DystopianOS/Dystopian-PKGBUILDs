@@ -1,0 +1,82 @@
+# Maintainer: Your Name <you@example.com>
+pkgname=code-assistant-manager
+pkgver=1.4.0.r21.gac57a311
+pkgrel=1
+pkgdesc="Unified CLI manager for AI coding assistants (Claude Code, OpenClaude, Gemini, etc.) with plugin marketplace"
+arch=('any')
+url="https://github.com/Chat2AnyLLM/code-assistant-manager"
+license=('MIT')
+
+depends=(
+    'python>=3.9'
+    'python-requests'
+    'python-pyyaml'
+    'python-dotenv'
+    'python-typer'
+    'python-rich'
+    'python-pydantic'
+    'python-httpx'
+    'python-tabulate'
+)
+
+makedepends=(
+    'git'
+    'python-build'
+    'python-installer'
+    'python-setuptools'
+    'python-wheel'
+)
+
+provides=('cam' 'code-assistant-manager')
+conflicts=('code-assistant-manager-git')
+options=('!strip')
+
+source=("git+https://github.com/Chat2AnyLLM/code-assistant-manager.git")
+sha256sums=('SKIP')
+
+pkgver() {
+    cd "${srcdir}/code-assistant-manager"
+    git describe --long --tags --abbrev=8 2>/dev/null | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g' \
+        || echo "0.r$(git rev-list --count HEAD).g$(git rev-parse --short HEAD)"
+}
+
+prepare() {
+    cd "${srcdir}/code-assistant-manager"
+    rm -rf build dist *.egg-info
+}
+
+build() {
+    cd "${srcdir}/code-assistant-manager"
+    echo "==> Building wheel with python-build..."
+    python -m build --wheel --no-isolation
+}
+
+package() {
+    cd "${srcdir}/code-assistant-manager"
+
+    # Install the wheel
+    python -m installer --destdir="${pkgdir}" dist/*.whl
+
+    # Example configuration files
+    install -Dm644 code_assistant_manager/config.yaml "${pkgdir}/usr/share/${pkgname}/config.yaml.example" 2>/dev/null || true
+    install -Dm644 providers.json "${pkgdir}/usr/share/${pkgname}/providers.json.example" 2>/dev/null || true
+    install -Dm644 skill_repos.json "${pkgdir}/usr/share/${pkgname}/skill_repos.json.example" 2>/dev/null || true
+
+    # License
+    if [ -f LICENSE* ]; then
+        install -Dm644 LICENSE* "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE" 2>/dev/null || true
+    fi
+
+    # Post-install message (shown during makepkg)
+    echo ""
+    echo "→ Code Assistant Manager installed successfully! 🎉"
+    echo ""
+    echo "Next steps:"
+    echo "   cam doctor                  # Check your setup"
+    echo "   mkdir -p ~/.config/code-assistant-manager"
+    echo "   cp /usr/share/code-assistant-manager/*.example ~/.config/code-assistant-manager/"
+    echo "   # Edit ~/.env and add your API keys"
+    echo ""
+    echo "Start the TUI with: cam launch"
+    echo ""
+}

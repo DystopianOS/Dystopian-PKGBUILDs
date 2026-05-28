@@ -1,0 +1,468 @@
+name: Submodule and Fork Monitor
+
+on:
+  schedule:
+    # Run every 4 hours to check for upstream changes
+    - cron: '0 */4 * * *'
+  workflow_dispatch:
+    inputs:
+      submodule_path:
+        description: 'Specific submodule path to update (optional)'
+        required: false
+        default: ''
+      sync_forks:
+        description: 'Sync forks with upstream'
+        required: false
+        default: true
+        type: boolean
+      force_update:
+        description: 'Force update even if no changes'
+        required: false
+        default: false
+        type: boolean
+      use_semantic_versioning:
+        description: 'Use semantic versioning for commits'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  detect-submodules-and-forks:
+    runs-on: ubuntu-latest
+    outputs:
+              token: ${{ secrets.GITHUB_TOKEN }}
+
+          - name: Scan for submodules
+            id: scan-submodules
+            run: |
+              #!/bin/bash
+              set -euo pipefail
+              
+              echo "🔍 Scanning for git submodules..."
+              
+              submodules_json="[]"
+              
+              if [[ -f .gitmodules ]]; then
+                # Parse .gitmodules file
+                while IFS= read -r line; do
+                  if [[ "$line" =~ ^\[submodule.*\"([^\"]+)\"\] ]]; then
+                    current_submodule="${BASH_REMATCH[1]}"
+                  elif [[ "$line" =~ ^[[:space:]]*path[[:space:]]*=[[:space:]]*(.+)$ ]]; then
+                    submodule_path="${BASH_REMATCH[1]}"
+                  elif [[ "$line" =~ ^[[:space:]]*url[[:space:]]*=[[:space:]]*(.+)$ ]]; then
+                    submodule_url="${BASH_REMATCH[1]}"
+              
+                    # Apply filter if provided
+                    if [[ -n "${{ inputs.submodule_path }}" ]] && [[ "$submodule_path" != "${{ inputs.submodule_path }}" ]]; then
+                      continue
+                    fi
+              
+                    # Get current commit hash
+                    current_commit=""
+                    if [[ -d "$submodule_path" ]]; then
+                      current_commit=$(cd "$submodule_path" && git rev-parse HEAD 2>/dev/null || echo "")
+                    fi
+              
+                    # Get upstream latest commit
+                    upstream_commit=""
+                    if [[ "$submodule_url" =~ https://github.com/([^/]+)/([^/]+) ]]; then
+                      repo_owner="${BASH_REMATCH[1]}"
+                      repo_name="${BASH_REMATCH[2]%.git}"
+                      upstream_commit=$(curl -s "https://api.github.com/repos/$repo_owner/$repo_name/commits" | jq -r '.[0].sha // ""')
+                    fi
+              
+                    # Check if update is needed
+                    needs_update=false
+                    if [[ -n "$current_commit" ]] && [[ -n "$upstream_commit" ]] && [[ "$current_commit" != "$upstream_commit" ]]; then
+                      needs_update=true
+                    elif [[ "${{ inputs.force_update }}" == "true" ]]; then
+                      needs_update=true
+                    fi
+              
+                    submodule_info=$(jq -n \
+                      --arg name "$current_submodule" \
+                      --arg path "$submodule_path" \
+                      --arg url "$submodule_url" \
+                      --arg current_commit "$current_commit" \
+                      --arg upstream_commit "$upstream_commit" \
+                      --argjson needs_update "$needs_update" \
+                      '{
+                        name: $name,
+                        path: $path,
+                        url: $url,
+                        current_commit: $current_commit,
+                        upstream_commit: $upstream_commit,
+                        needs_update: $needs_update
+                      }')
+              
+                    submodules_json=$(echo "$submodules_json" | jq ". += [$submodule_info]")
+                  fi
+                done < .gitmodules
+              
+                echo "📊 Found $(echo "$submodules_json" | jq length) submodules"
+                echo "🔄 Submodules needing update: $(echo "$submodules_json" | jq '[.[] | select(.needs_update)] | length')"
+              else
+                echo "📝 No .gitmodules file found"
+              fi
+              
+              echo "submodules=$submodules_json" >> $GITHUB_OUTPUT
+
+          - name: Detect forked repositories
+            id: detect-forks
+            if: inputs.sync_forks == 'true'
+            run: |
+              #!/bin/bash
+              set -euo pipefail
+              
+              echo "🍴 Detecting forked repositories..."
+              
+              forks_json="[]"
+              
+              # Check if current repo is a fork
+              repo_info=$(curl -s "https://api.github.com/repos/${{ github.repository }}")
+              is_fork=$(echo "$repo_info" | jq -r '.fork // false')
+              
+              if [[ "$is_fork" == "true" ]]; then
+                parent_repo=$(echo "$repo_info" | jq -r '.parent.full_name')
+                parent_default_branch=$(echo "$repo_info" | jq -r '.parent.default_branch')
+              
+                # Get latest commit from parent
+                parent_latest_commit=$(curl -s "https://api.github.com/repos/$parent_repo/commits/$parent_default_branch" | jq -r '.sha')
+              
+                # Get current HEAD commit
+                current_commit=$(git rev-parse HEAD)
+              
+                needs_sync=false
+                if [[ "$parent_latest_commit" != "$current_commit" ]]; then
+                  needs_sync=true
+                fi
+              
+                fork_info=$(jq -n \
+                  --arg repo "${{ github.repository }}" \
+                  --arg parent "$parent_repo" \
+                  --arg parent_branch "$parent_default_branch" \
+                  --arg current_commit "$current_commit" \
+                  --arg parent_commit "$parent_latest_commit" \
+                  --argjson needs_sync "$needs_sync" \
+                  '{
+                    repo: $repo,
+                    parent: $parent,
+                    parent_branch: $parent_branch,
+                    current_commit: $current_commit,
+                    parent_commit: $parent_commit,
+                    needs_sync: $needs_sync
+                  }')
+              
+                forks_json=$(echo "$forks_json" | jq ". += [$fork_info]")
+              fi
+              
+              echo "forks=$forks_json" >> $GITHUB_OUTPUT
+
+      update-submodules:
+        needs: detect-submodules-and-forks
+        if: needs.detect-submodules-and-forks.outputs.submodules != '[]'
+        runs-on: ubuntu-latest
+        strategy:
+          fail-fast: false
+          matrix:
+            include: ${{ fromJson(needs.detect-submodules-and-forks.outputs.submodules) }}
+
+        steps:
+          - name: Checkout with submodules
+            uses: actions/checkout@v4
+            with:
+              fetch-depth: 0
+              submodules: recursive
+              token: ${{ secrets.GITHUB_TOKEN }}
+
+          - name: Update submodule - ${{ matrix.name }}
+            if: matrix.needs_update == true
+            run: |
+              #!/bin/bash
+              set -euo pipefail
+              
+              submodule_path="${{ matrix.path }}"
+              submodule_name="${{ matrix.name }}"
+              
+              echo "🔄 Updating submodule: $submodule_name"
+              echo "📁 Path: $submodule_path"
+              
+              # Update the submodule to latest commit
+              git submodule update --remote "$submodule_path"
+              
+              # Check if there are actually changes
+              if git diff --quiet HEAD -- "$submodule_path"; then
+                echo "📌 No changes after update"
+                exit 0
+              fi
+              
+              # Get new commit info
+              new_commit=$(cd "$submodule_path" && git rev-parse HEAD)
+              new_commit_short=$(cd "$submodule_path" && git rev-parse --short HEAD)
+              
+              # Get commit message for context
+              commit_message=$(cd "$submodule_path" && git log -1 --pretty=format:"%s" 2>/dev/null || echo "Update")
+              
+              echo "✅ Submodule updated to commit $new_commit_short"
+              echo "new_commit=$new_commit" >> $GITHUB_OUTPUT
+              echo "new_commit_short=$new_commit_short" >> $GITHUB_OUTPUT
+              echo "commit_message=$commit_message" >> $GITHUB_OUTPUT
+              
+              # Update any PKGBUILD files that reference this submodule
+              if [[ -f "$submodule_path/../PKGBUILD" ]]; then
+                cd "$submodule_path/.."
+                if grep -q "^_commit=" PKGBUILD; then
+                  sed -i "s/^_commit=.*/_commit=$new_commit/" PKGBUILD
+                  echo "📝 Updated PKGBUILD _commit variable"
+                fi
+              fi
+
+          - name: Update checksums for PKGBUILD
+            if: matrix.needs_update == true && hashFiles(format('{0}/../PKGBUILD', matrix.path)) != ''
+            uses: DCx7C5/actions/aur-updpkgsums@v1
+            with:
+              pkg_name: ${{ matrix.name }}
+              working_directory: ${{ matrix.path }}/..
+            continue-on-error: true
+
+          - name: Get semantic next version
+            if: matrix.needs_update == true && inputs.use_semantic_versioning == true
+            id: semantic-version
+            uses: thenativeweb/get-next-version@main
+            with:
+              prefix: v
+            continue-on-error: true
+
+          - name: Stage submodule changes
+            if: matrix.needs_update == true
+            uses: DCx7C5/actions/git-stage-changes@v1
+            with:
+              files: |
+                ${{ matrix.path }}
+                ${{ hashFiles(format('{0}/../PKGBUILD', matrix.path)) != '' && format('{0}/../PKGBUILD', matrix.path) || '' }}
+
+          - name: Commit the submodule update
+            if: matrix.needs_update == true
+            uses: DCx7C5/actions/git-commit@v1
+            with:
+              message: |
+                chore(${{ matrix.name }}): update submodule to ${{ steps.update-submodule.outputs.new_commit_short }}
+                
+                Latest upstream commit: ${{ steps.update-submodule.outputs.commit_message }}
+                
+                - Submodule: ${{ matrix.name }}
+                - Path: ${{ matrix.path }}
+                - Commit: ${{ steps.update-submodule.outputs.new_commit }}
+                ${{ hashFiles(format('{0}/../PKGBUILD', matrix.path)) != '' && '- Updated PKGBUILD _commit variable' || '' }}
+                
+                Co-authored-by: Dystopian Submodule Updater <dystopian-submodules@github.actions>
+              skip-if-no-changes: true
+              signoff: true
+
+      sync-forks:
+        needs: detect-submodules-and-forks
+        if: needs.detect-submodules-and-forks.outputs.forks != '[]' && inputs.sync_forks == true
+        runs-on: ubuntu-latest
+
+        steps:
+          - name: Checkout repository
+            uses: actions/checkout@v4
+            with:
+              fetch-depth: 0
+              token: ${{ secrets.GITHUB_TOKEN }}
+
+          - name: Sync with upstream
+            run: |
+              #!/bin/bash
+              set -euo pipefail
+              
+              forks='${{ needs.detect-submodules-and-forks.outputs.forks }}'
+              
+              if [[ "$forks" == "[]" ]]; then
+                echo "📝 No forks to sync"
+                exit 0
+              fi
+              
+              fork_info=$(echo "$forks" | jq -r '.[0]')
+              parent_repo=$(echo "$fork_info" | jq -r '.parent')
+              parent_branch=$(echo "$fork_info" | jq -r '.parent_branch')
+              needs_sync=$(echo "$fork_info" | jq -r '.needs_sync')
+              
+              if [[ "$needs_sync" != "true" ]]; then
+                echo "📌 Fork is already up to date with upstream"
+                exit 0
+              fi
+              
+              echo "🍴 Syncing fork with upstream: $parent_repo"
+              
+              # Add upstream remote
+              git remote add upstream "https://github.com/$parent_repo.git" 2>/dev/null || true
+              
+              # Fetch upstream
+              git fetch upstream "$parent_branch"
+              
+              # Check if we can fast-forward
+              merge_base=$(git merge-base HEAD "upstream/$parent_branch")
+              current_commit=$(git rev-parse HEAD)
+              
+              echo "sync_needed=true" >> $GITHUB_OUTPUT
+              echo "parent_repo=$parent_repo" >> $GITHUB_OUTPUT
+              echo "parent_branch=$parent_branch" >> $GITHUB_OUTPUT
+              
+              if [[ "$merge_base" == "$current_commit" ]]; then
+                echo "🚀 Fast-forwarding to upstream/$parent_branch"
+                git merge --ff-only "upstream/$parent_branch"
+                echo "sync_type=fast-forward" >> $GITHUB_OUTPUT
+                echo "✅ Successfully synced with upstream"
+              else
+                echo "⚠️  Cannot fast-forward. Manual intervention required."
+                echo "Current branch has diverged from upstream"
+                echo "sync_type=diverged" >> $GITHUB_OUTPUT
+              
+                # Store divergence info for issue creation
+                echo "diverged=true" >> $GITHUB_OUTPUT
+              fi
+
+          - name: Get semantic version for sync
+            if: steps.sync-with-upstream.outputs.sync_type == 'fast-forward' && inputs.use_semantic_versioning == true
+            id: semantic-version
+            uses: thenativeweb/get-next-version@main
+            with:
+              prefix: v
+            continue-on-error: true
+
+          - name: Commit sync changes
+            if: steps.sync-with-upstream.outputs.sync_type == 'fast-forward'
+            uses: DCx7C5/actions/git-commit@v1
+            with:
+              message: |
+                chore: sync with upstream ${{ steps.sync-with-upstream.outputs.parent_repo }}
+                
+                Synchronized fork with upstream repository changes
+                
+                - Upstream: ${{ steps.sync-with-upstream.outputs.parent_repo }}
+                - Branch: ${{ steps.sync-with-upstream.outputs.parent_branch }}
+                - Sync type: Fast-forward merge
+                ${{ steps.semantic-version.outputs.version && format('- Next version: {0}', steps.semantic-version.outputs.version) || '' }}
+                
+                Co-authored-by: Dystopian Fork Sync <dystopian-fork-sync@github.actions>
+              allow-empty: true
+              skip-if-no-changes: true
+
+          - name: Create manual intervention issue
+            if: steps.sync-with-upstream.outputs.diverged == 'true'
+            uses: DCx7C5/actions/gh-create-issue@v1
+            with:
+              title: "🔄 Fork sync requires manual intervention"
+              body: |
+                ## Fork Sync Issue
+                
+                The fork has diverged from upstream and cannot be automatically synced.
+                
+                **Upstream Repository:** ${{ steps.sync-with-upstream.outputs.parent_repo }}
+                **Upstream Branch:** ${{ steps.sync-with-upstream.outputs.parent_branch }}
+                **Sync Status:** Diverged - manual intervention required
+                
+                ### What happened?
+                The local branch has commits that are not present in the upstream branch, preventing an automatic fast-forward merge.
+                
+                ### Next Steps:
+                1. Review the divergent commits
+                2. Decide whether to:
+                   - Merge upstream changes (create merge commit)
+                   - Rebase local changes on top of upstream
+                   - Reset to upstream (losing local changes)
+                
+                ### Useful Commands:
+                ```bash
+                git fetch upstream ${{ steps.sync-with-upstream.outputs.parent_branch }}
+                git log --oneline HEAD..upstream/${{ steps.sync-with-upstream.outputs.parent_branch }}  # See upstream changes
+                git log --oneline upstream/${{ steps.sync-with-upstream.outputs.parent_branch }}..HEAD  # See local changes
+                ```
+                
+                _Automatically generated by Dystopian Fork Monitor_
+              labels: |
+                sync
+                manual-review
+                upstream
+              assignees: ${{ github.actor }}
+            continue-on-error: true
+
+          - name: Push sync changes
+            if: steps.sync-with-upstream.outputs.sync_type == 'fast-forward'
+            uses: DCx7C5/actions/git-push-changes@v1
+            with:
+              message: "Sync with upstream ${{ steps.sync-with-upstream.outputs.parent_repo }}"
+              force-push: false
+
+      push-changes:
+        needs: [ detect-submodules-and-forks, update-submodules, sync-forks ]
+        if: always() && (needs.update-submodules.result == 'success' || needs.sync-forks.result == 'success')
+        runs-on: ubuntu-latest
+
+        steps:
+          - name: Checkout repository
+            uses: actions/checkout@v4
+            with:
+              fetch-depth: 0
+              token: ${{ secrets.GITHUB_TOKEN }}
+
+          - name: Push all changes
+            uses: DCx7C5/actions/git-push-changes@v1
+            with:
+              message: "chore: automated submodule and fork updates"
+              force-push: false
+              create-pr: false
+
+      create-summary:
+        needs: [ detect-submodules-and-forks, update-submodules, sync-forks ]
+        if: always()
+        runs-on: ubuntu-latest
+
+        steps:
+          - name: Generate summary
+            run: |
+              echo "## 🔄 Submodule & Fork Update Summary" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              
+              submodules='${{ needs.detect-submodules-and-forks.outputs.submodules }}'
+              forks='${{ needs.detect-submodules-and-forks.outputs.forks }}'
+              
+              # Submodules summary
+              total_submodules=$(echo "$submodules" | jq length)
+              updated_submodules=$(echo "$submodules" | jq '[.[] | select(.needs_update)] | length')
+              
+              echo "### 📦 Submodules" >> $GITHUB_STEP_SUMMARY
+              echo "- Total submodules: $total_submodules" >> $GITHUB_STEP_SUMMARY
+              echo "- Updated: $updated_submodules" >> $GITHUB_STEP_SUMMARY
+              
+              if [[ "$updated_submodules" -gt 0 ]]; then
+                echo "" >> $GITHUB_STEP_SUMMARY
+                echo "#### Updated Submodules:" >> $GITHUB_STEP_SUMMARY
+                echo "$submodules" | jq -r '.[] | select(.needs_update) | "- **\(.name)** (\(.path)): \(.current_commit[0:7]) → \(.upstream_commit[0:7])"' >> $GITHUB_STEP_SUMMARY
+              fi
+              
+              # Forks summary
+              if [[ "$forks" != "[]" ]]; then
+                echo "" >> $GITHUB_STEP_SUMMARY
+                echo "### 🍴 Fork Sync" >> $GITHUB_STEP_SUMMARY
+              
+                fork_info=$(echo "$forks" | jq -r '.[0]')
+                parent_repo=$(echo "$fork_info" | jq -r '.parent')
+                needs_sync=$(echo "$fork_info" | jq -r '.needs_sync')
+              
+                if [[ "$needs_sync" == "true" ]]; then
+                  echo "✅ Fork synced with upstream: $parent_repo" >> $GITHUB_STEP_SUMMARY
+                else
+                  echo "📌 Fork is up to date with upstream: $parent_repo" >> $GITHUB_STEP_SUMMARY
+                fi
+              fi
+              
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "---" >> $GITHUB_STEP_SUMMARY
+              echo "*Automated by Dystopian Package Management System*" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,3 @@
+#!/bin/sh
+# grok-cli — xAI Grok proxy for claude-code
+exec node /usr/lib/grok-cli/index.js "$@"

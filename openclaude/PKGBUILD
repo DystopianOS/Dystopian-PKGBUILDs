@@ -1,7 +1,8 @@
-# Maintainer: Your Name <you@example.com>
+# Maintainer: Dystopian <dcxdevelopment@protonmail.com>
+
 pkgname=openclaude
 pkgver=0.1.7
-pkgrel=1
+pkgrel=2
 pkgdesc="Open-source Claude Code agent – community port of the leaked Anthropic Claude Code"
 arch=('x86_64' 'aarch64')
 url="https://github.com/Gitlawb/openclaude"
@@ -29,34 +30,31 @@ build() {
 package() {
   cd "${srcdir}/openclaude-${pkgver}"
 
-  # Ensure target directories exist
   mkdir -p "${pkgdir}/usr/bin"
   mkdir -p "${pkgdir}/usr/lib/openclaude"
 
-  # Create proper wrapper script
+  # Wrapper-Script
   cat > "${pkgdir}/usr/bin/openclaude" << 'EOF'
 #!/bin/sh
 NODE_PATH="/usr/lib/openclaude/node_modules" exec node "/usr/lib/openclaude/cli.mjs" "$@"
 EOF
-
   chmod +x "${pkgdir}/usr/bin/openclaude"
 
-  # Install the actual built file
+  # Gebündelte CLI installieren
   install -Dm755 dist/cli.mjs "${pkgdir}/usr/lib/openclaude/cli.mjs"
 
-  set -x
-  echo "DEBUG: srcdir node_modules Inhalt vor Kopie:"
-  ls -l "${srcdir}/openclaude-${pkgver}/node_modules" || echo "NICHT GEFUNDEN"
-  # Copy node_modules for runtime dependencies (robust, auch für Symlinks)
-  cp -a "${srcdir}/openclaude-${pkgver}/node_modules" "${pkgdir}/usr/lib/openclaude/"
-  echo "DEBUG: pkgdir node_modules Inhalt nach Kopie:"
-  ls -l "${pkgdir}/usr/lib/openclaude/node_modules" || echo "node_modules nicht kopiert!"
-  set +x
+  # node_modules für Runtime-Abhängigkeiten (inkl. Symlinks)
+  cp -a node_modules "${pkgdir}/usr/lib/openclaude/"
 
-  # License and docs
+  # $srcdir-Referenzen in cli.mjs durch den finalen Installationspfad ersetzen.
+  # bun bettet bei manchen Paketen (undici, @aws-sdk/util-user-agent-node) absolute
+  # __filename / require.resolve()-Pfade ein, die auf $srcdir/node_modules zeigen.
+  # Da node_modules nach /usr/lib/openclaude/node_modules kopiert wird, ist das
+  # die korrekte Laufzeitadresse und der sed-Ersatz ist funktional korrekt.
+  sed -i "s|${srcdir}/openclaude-${pkgver}/node_modules|/usr/lib/openclaude/node_modules|g" \
+    "${pkgdir}/usr/lib/openclaude/cli.mjs"
+
+  # Lizenz und Dokumentation
   install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE" 2>/dev/null || true
   install -Dm644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md" 2>/dev/null || true
-
-  # Entferne versehentlich im Paketverzeichnis abgelegte Metadaten-Dateien
-  rm -f "${pkgdir}/.BUILDINFO" "${pkgdir}/.MTREE" "${pkgdir}/.PKGINFO"
 }

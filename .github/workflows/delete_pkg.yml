@@ -25,7 +25,7 @@ on:
 
 jobs:
   delete-package:
-    if: ${{ inputs.change_type == 'removed' }}
+    if: inputs.change_type == 'removed'
     runs-on: ubuntu-latest
     outputs:
       deleted_package: ${{ steps.finalize.outputs.package_name }}

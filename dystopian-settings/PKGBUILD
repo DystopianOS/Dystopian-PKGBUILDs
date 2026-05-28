@@ -23,6 +23,7 @@ validpgpkeys=(
     '14A71FEDA1F764F7075FFA40FF64D67D0F00DD12'
     'C71C37EA17233736B9FAD43EFAD24DA0784D363A')
 depends=(
+    dystopian-keyring
     zram-generator
     ananicy-cpp
     dystopian-ananicy-rules

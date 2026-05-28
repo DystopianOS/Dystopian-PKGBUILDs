@@ -1,0 +1,2 @@
+#!/bin/sh
+NODE_PATH="/usr/lib/openclaude/node_modules" exec node "/usr/lib/openclaude/cli.mjs" "$@"

@@ -25,8 +25,8 @@ validpgpkeys=(
 )
 
 prepare() {
-  # Copy from dystopian-hooks repo at sibling level
-  _srcdir="${startdir%/*}/dystopian-hooks"
+  # Copy from dystopian-hooks repo (parent directory of Dystopian-PKGBUILDS)
+  _srcdir="${startdir%/*/*}/dystopian-hooks"
   
   if [[ ! -d "$_srcdir" ]]; then
     echo "Error: dystopian-hooks repository not found at expected location"
@@ -35,7 +35,7 @@ prepare() {
   fi
   
   mkdir -p "${srcdir}/hooks"
-  cp -r "$_srcdir"/* "${srcdir}/hooks/" || true
+  cp -r "$_srcdir"/* "${srcdir}/hooks/" 2>/dev/null || true
 }
 
 package() {

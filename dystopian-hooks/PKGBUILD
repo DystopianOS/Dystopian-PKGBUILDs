@@ -24,23 +24,36 @@ validpgpkeys=(
   'C71C37EA17233736b9fad43efad24da0784d363a'
 )
 
-package() {
-  # Local source from dystopian-hooks repo
-  _srcdir="/home/daen/Projects/Dystopian/dystopian-hooks"
-
-  install -Dm644 "$_srcdir/dystopian-plymouth-initramfs.hook" "$pkgdir/usr/share/libalpm/hooks/dystopian-plymouth-initramfs.hook"
-  install -Dm644 "$_srcdir/dystopian-reboot-required.hook" "$pkgdir/usr/share/libalpm/hooks/dystopian-reboot-required.hook"
-  install -Dm644 "$_srcdir/nvidia-driver-switch.hook" "$pkgdir/usr/share/libalpm/hooks/nvidia-driver-switch.hook"
-  install -Dm644 "$_srcdir/98-bundle-create.hook" "$pkgdir/usr/share/libalpm/hooks/98-bundle-create.hook"
-  install -Dm644 "$_srcdir/99-bundle-sign.hook" "$pkgdir/usr/share/libalpm/hooks/99-bundle-sign.hook"
-  install -Dm644 "$_srcdir/bundle-remove.hook" "$pkgdir/usr/share/libalpm/hooks/bundle-remove.hook"
-  install -Dm644 "$_srcdir/orphans.hook" "$pkgdir/usr/share/libalpm/hooks/orphans.hook"
-  install -Dm644 "$_srcdir/pacnew-check.hook" "$pkgdir/usr/share/libalpm/hooks/pacnew-check.hook"
+prepare() {
+  # Copy from dystopian-hooks repo at sibling level
+  _srcdir="${startdir%/*}/dystopian-hooks"
   
-  install -Dm755 "$_srcdir/dystopian-reboot-required" "$pkgdir/usr/share/libalpm/scripts/dystopian-reboot-required"
-  install -Dm755 "$_srcdir/update-initramfs" "$pkgdir/usr/bin/update-initramfs"
-  install -Dm755 "$_srcdir/nvidia-driver-switch" "$pkgdir/usr/local/bin/nvidia-driver-switch"
-  install -Dm755 "$_srcdir/dystopian-hooks-runner" "$pkgdir/usr/bin/dystopian-hooks-runner"
+  if [[ ! -d "$_srcdir" ]]; then
+    echo "Error: dystopian-hooks repository not found at expected location"
+    echo "Expected: $_srcdir"
+    return 1
+  fi
+  
+  mkdir -p "${srcdir}/hooks"
+  cp -r "$_srcdir"/* "${srcdir}/hooks/" || true
+}
+
+package() {
+  cd "${srcdir}/hooks"
+
+  install -Dm644 dystopian-plymouth-initramfs.hook "$pkgdir/usr/share/libalpm/hooks/dystopian-plymouth-initramfs.hook"
+  install -Dm644 dystopian-reboot-required.hook "$pkgdir/usr/share/libalpm/hooks/dystopian-reboot-required.hook"
+  install -Dm644 nvidia-driver-switch.hook "$pkgdir/usr/share/libalpm/hooks/nvidia-driver-switch.hook"
+  install -Dm644 98-bundle-create.hook "$pkgdir/usr/share/libalpm/hooks/98-bundle-create.hook"
+  install -Dm644 99-bundle-sign.hook "$pkgdir/usr/share/libalpm/hooks/99-bundle-sign.hook"
+  install -Dm644 bundle-remove.hook "$pkgdir/usr/share/libalpm/hooks/bundle-remove.hook"
+  install -Dm644 orphans.hook "$pkgdir/usr/share/libalpm/hooks/orphans.hook"
+  install -Dm644 pacnew-check.hook "$pkgdir/usr/share/libalpm/hooks/pacnew-check.hook"
+  
+  install -Dm755 dystopian-reboot-required "$pkgdir/usr/share/libalpm/scripts/dystopian-reboot-required"
+  install -Dm755 update-initramfs "$pkgdir/usr/bin/update-initramfs"
+  install -Dm755 nvidia-driver-switch "$pkgdir/usr/local/bin/nvidia-driver-switch"
+  install -Dm755 dystopian-hooks-runner "$pkgdir/usr/bin/dystopian-hooks-runner"
 }
 
 # vim:set ts=8 sts=2 sw=2 et:

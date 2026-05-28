@@ -2,7 +2,7 @@
 # NVIDIA driver mode switcher for Dystopian
 # Automatically switches between NVIDIA LKM and built-in kernel driver
 
-set -e
+set -euo pipefail
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "Error: nvidia-driver-switch must run as root" >&2
@@ -12,11 +12,17 @@ fi
 GRUB_CONFIG="/etc/default/grub"
 NVIDIA_BLACKLIST="modprobe.blacklist=nvidia,nvidia_uvm,nvidia_drm"
 
+# Escape special characters for sed
+escape_sed() {
+  printf '%s\n' "$1" | sed -e 's/[\/&.]/\\&/g'
+}
+
 # Detect current kernel
 detect_kernel() {
-  if pacman -Q linux-nvidia-driver 2>/dev/null | grep -q linux-nvidia; then
+  if pacman -Q nvidia 2>/dev/null | grep -q "^nvidia " && \
+     pacman -Q linux 2>/dev/null | grep -q "^linux "; then
     echo "nvidia-builtin"
-  elif pacman -Q nvidia-dkms 2>/dev/null | grep -q nvidia-dkms; then
+  elif pacman -Q nvidia-dkms 2>/dev/null | grep -q "^nvidia-dkms "; then
     echo "nvidia-lkm"
   else
     echo "none"
@@ -26,23 +32,28 @@ detect_kernel() {
 # Update GRUB config
 update_grub_cmdline() {
   local mode="$1"
+  local escaped_blacklist
+  escaped_blacklist=$(escape_sed "$NVIDIA_BLACKLIST")
   
   if [ ! -f "$GRUB_CONFIG" ]; then
     echo "Warning: $GRUB_CONFIG not found" >&2
     return 1
   fi
 
-  if [ "$mode" = "nvidia-builtin" ]; then
-    # Remove blacklist if present
-    sed -i 's/ *'"$NVIDIA_BLACKLIST"'//g' "$GRUB_CONFIG"
-    echo "✓ NVIDIA built-in kernel driver enabled (blacklist removed)"
-  elif [ "$mode" = "nvidia-lkm" ]; then
-    # Add blacklist if not present
-    if ! grep -q "$NVIDIA_BLACKLIST" "$GRUB_CONFIG"; then
-      sed -i "s/GRUB_CMDLINE_LINUX=\"/GRUB_CMDLINE_LINUX=\"$NVIDIA_BLACKLIST /" "$GRUB_CONFIG"
-      echo "✓ NVIDIA LKM driver enabled (built-in blacklisted)"
-    fi
-  fi
+  case "$mode" in
+    nvidia-builtin)
+      # Remove blacklist from GRUB_CMDLINE_LINUX only (first/active line)
+      sed -i "0,/^GRUB_CMDLINE_LINUX=\"/{s/ *${escaped_blacklist}//;}" "$GRUB_CONFIG" 2>/dev/null || true
+      echo "✓ NVIDIA built-in kernel driver enabled (blacklist removed)"
+      ;;
+    nvidia-lkm)
+      # Add blacklist if not already present in the active line
+      if ! sed -n '0,/^GRUB_CMDLINE_LINUX="/p' "$GRUB_CONFIG" | grep -q "${escaped_blacklist}"; then
+        sed -i "0,/^GRUB_CMDLINE_LINUX=\"/{s/^GRUB_CMDLINE_LINUX=\"/GRUB_CMDLINE_LINUX=\"${escaped_blacklist} /;}" "$GRUB_CONFIG"
+        echo "✓ NVIDIA LKM driver enabled (built-in blacklisted)"
+      fi
+      ;;
+  esac
 
   # Regenerate GRUB config
   if command -v grub-mkconfig &>/dev/null; then
@@ -62,8 +73,9 @@ case "$CURRENT_MODE" in
     ;;
   none)
     # No NVIDIA driver detected, clean up any leftover config
-    if grep -q "$NVIDIA_BLACKLIST" "$GRUB_CONFIG" 2>/dev/null; then
-      sed -i 's/ *'"$NVIDIA_BLACKLIST"'//g' "$GRUB_CONFIG"
+    escaped_blacklist=$(escape_sed "$NVIDIA_BLACKLIST")
+    if grep -q "${escaped_blacklist}" "$GRUB_CONFIG" 2>/dev/null; then
+      sed -i "s/ *${escaped_blacklist}//g" "$GRUB_CONFIG"
       grub-mkconfig -o /boot/grub/grub.cfg 2>/dev/null || true
       echo "ℹ NVIDIA driver not found, cleaned up GRUB config"
     fi

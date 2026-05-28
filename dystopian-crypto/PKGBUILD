@@ -14,7 +14,7 @@ depends=("${pkgname}-libs")
 optdepends=('tpm2-tss' 'tpm2-openssl' 'tpm2-tools' 'tpm2-abrmd' 'nss')
 makedepends=('git')
 conflicts=('dystopian-crypto')
-install=$pkgname.install
+# install=$pkgname.install
 source=("git+$url.git#tag=v${pkgver}?signed")
 
 backup=("var/lib/dystopian/crypto/data.json")
@@ -31,8 +31,8 @@ package() {
                  "$pkgdir"/var/lib/dystopian/crypto \
                  "$pkgdir"/etc/dystopian/crypto
 
-  install -Dm750 dystopian-crypto "$pkgdir"/usr/bin/dystopian-crypto
-  install -Dm600 data.json "$pkgdir"/var/lib/dystopian/crypto/data.json
+  install -Dm750 bin/dystopian-crypto "$pkgdir"/usr/bin/dystopian-crypto
+  install -Dm600 conf/data.json "$pkgdir"/var/lib/dystopian/crypto/data.json
 
   install -dm755 "$pkgdir"/etc/dystopian/crypto/{ca,cert,crl}
   install -dm700 "$pkgdir"/etc/dystopian/crypto/{ca,cert}/private

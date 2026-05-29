@@ -44,8 +44,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.package }}" ]]; then
-            mapfile -t pkgs < <(printf '%s\n' "${{ inputs.package }}" | sed '/^$/d')
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.package }}" ]]; then
+            mapfile -t pkgs < <(printf '%s\n' "${{ github.event.inputs.package }}" | sed '/^$/d')
           else
             before="${{ github.event.before }}"
             after="${{ github.sha }}"
@@ -74,7 +74,7 @@ jobs:
 
           entries='[]'
           for pkg in "${pkgs[@]}"; do
-            channel="${{ inputs.channel || 'core' }}"
+            channel="${{ github.event.inputs.channel || 'core' }}"
             if [[ -f "$channels_cfg" ]]; then
               mapped="$(jq -r --arg p "$pkg" '.[$p] // empty' "$channels_cfg" 2>/dev/null || true)"
               [[ -n "$mapped" ]] && channel="$mapped"

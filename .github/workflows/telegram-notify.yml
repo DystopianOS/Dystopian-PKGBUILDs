@@ -1,4 +1,4 @@
-name: Telegram Workflow Notifications
+name: Telegram Notifications
 
 on:
   workflow_run:
@@ -16,28 +16,44 @@ on:
       - "Sync Upstream Sources"
     types:
       - completed
+  release:
+    types:
+      - published
+      - prereleased
 
 jobs:
-  notify-telegram:
-    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure' }}
+  notify-release:
+    if: ${{ github.event_name == 'release' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Send Telegram notification
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          REPO: ${{ github.repository }}
-          WORKFLOW: ${{ github.event.workflow_run.name }}
-          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
-          BRANCH: ${{ github.event.workflow_run.head_branch }}
-          URL: ${{ github.event.workflow_run.html_url }}
-        run: |
-          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
-            echo "Telegram secrets are not configured."
-            exit 1
-          fi
+      - name: Notify Telegram (release)
+        uses: DCx7C5/actions/tg-notify-release@v1
+        with:
+          tg-token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          chat-id: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          repository: ${{ github.repository }}
+          commit: ${{ github.sha }}
+          branch: ${{ github.ref_name }}
+          actor: ${{ github.actor }}
+          fingerprint: "N/A"
+          tag-name: ${{ github.event.release.tag_name }}
+          release-name: ${{ github.event.release.name || github.event.release.tag_name }}
 
-          message="[$REPO] Workflow '$WORKFLOW' finished with: $CONCLUSION on branch '$BRANCH'. $URL"
-          curl -fsS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
-            --data-urlencode "text=${message}"
+  notify-workflow:
+    if: ${{ github.event_name == 'workflow_run' && (github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Telegram (workflow)
+        uses: DCx7C5/actions/tg-notify@v1
+        with:
+          tg-token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          chat-id: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          parse-mode: HTML
+          message: |
+            <b>⚙️ Workflow Completed</b>
+
+            <b>Repository:</b> <code>${{ github.repository }}</code>
+            <b>Workflow:</b> <code>${{ github.event.workflow_run.name }}</code>
+            <b>Status:</b> <code>${{ github.event.workflow_run.conclusion }}</code>
+            <b>Branch:</b> <code>${{ github.event.workflow_run.head_branch }}</code>
+            <b>Run:</b> <a href="${{ github.event.workflow_run.html_url }}">Open workflow run</a>

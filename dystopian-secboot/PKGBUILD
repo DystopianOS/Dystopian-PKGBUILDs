@@ -9,7 +9,7 @@ arch=('x86_64')
 url="https://github.com/DystopianOS/dystopian-secboot"
 license=('GPL3')
 makedepends=()
-depends=('python' 'mokutil' 'dystopian-libs' 'dystopian-crypto')
+depends=('python' 'mokutil' 'gnupg' 'dystopian-libs' 'dystopian-crypto')
 optdepends=(
   'grub: Grub bootloader support'
   'dracut: dracut initramfs generator support')
@@ -30,11 +30,12 @@ package() {
   install -d "${pkgdir}/usr/share/doc/dystopian/secboot" \
              "${pkgdir}/var/lib/dystopian/secboot" \
              "${pkgdir}/etc/dystopian/secboot" \
-             "${pkgdir}/usr/lib/dystopian"
+             "${pkgdir}/usr/lib/dystopian" \
+             "${pkgdir}/usr/share/dystopian/secboot"
 
   # Binary files
   install -m750 dystopian-secboot "$pkgdir"/usr/bin/dystopian-secboot
+  install -m644 pacman.conf.template "$pkgdir"/usr/share/dystopian/secboot/pacman.conf.template
 
 }
-
 

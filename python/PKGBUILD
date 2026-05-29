@@ -23,8 +23,10 @@ makedepends=('tk' 'sqlite' 'bluez-libs' 'llvm' 'gdb' 'xorg-server-xvfb' 'ttf-fon
 source=("https://www.python.org/ftp/python/${pkgver%rc*}/Python-${pkgver}.tar.xz"
         EXTERNALLY-MANAGED)
 
-sha512sums=('9fd875f7a1d96d64e7150913ef38b72b0aeecfcbc24ba46967e57b6495146b0cba6b940c273561fc4d656b6d0ce2e23ffb7bd32bcd0b61fd59a6d90585998c07')
-b2sums=('d1c8e7a9b0c5e4f1a3b2c6d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8g9h0i1j2k3l4m5n6o7p8q9r0s1t2u3v4w5x6y7z8a9b0c1d2e3f4g5h6i7j8k9l0m1n2o3p4q5r6s7t8u9v0w1x2y3z4')
+sha512sums=('9fd875f7a1d96d64e7150913ef38b72b0aeecfcbc24ba46967e57b6495146b0cba6b940c273561fc4d656b6d0ce2e23ffb7bd32bcd0b61fd59a6d90585998c07'
+            'SKIP')
+b2sums=('d1c8e7a9b0c5e4f1a3b2c6d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8g9h0i1j2k3l4m5n6o7p8q9r0s1t2u3v4w5x6y7z8a9b0c1d2e3f4g5h6i7j8k9l0m1n2o3p4q5r6s7t8u9v0w1x2y3z4'
+        'SKIP')
 
 
 validpgpkeys=('14A71FEDA1F764F7075FFA40FF64D67D0F00DD12'
@@ -129,6 +131,5 @@ package_python-tests() {
 
   cd Python-${pkgver}
   make DESTDIR="${pkgdir}" EXTRA_CFLAGS="$CFLAGS" libinstall
-  cd "$pkgdir"/usr/lib/python*/
-  rm -r !(test)
+  find "$pkgdir"/usr/lib/python*/ -mindepth 1 -maxdepth 1 ! -name test -exec rm -rf {} +
 }

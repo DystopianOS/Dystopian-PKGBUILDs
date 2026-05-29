@@ -46,14 +46,14 @@ jobs:
           config_file=".github/upstream-sources.json"
           [[ -f "$config_file" ]] || { echo "::error::Missing $config_file"; exit 1; }
 
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           selection="${{ inputs.source_name }}"
           jq_filter='.[]'
           if [[ -n "${selection}" ]]; then
             jq_filter=".[] | select(.name == \"${selection}\")"
           fi
-
-          tmp_root="$(mktemp -d)"
-          trap 'rm -rf "$tmp_root"' EXIT
 
           matched=0
           while IFS= read -r row; do
@@ -63,20 +63,42 @@ jobs:
             name="$(jq -r '.name' <<<"$row")"
             repo="$(jq -r '.repo' <<<"$row")"
             ref="$(jq -r '.ref // "main"' <<<"$row")"
-            source_dir="$(jq -r '.source_dir // "."' <<<"$row")"
             target_dir="$(jq -r '.target_dir' <<<"$row")"
+            sync_method="$(jq -r '.sync_method // "subtree"' <<<"$row")"
 
             if [[ -z "${target_dir}" || "${target_dir}" == "null" ]]; then
               echo "::error::target_dir is required for source ${name}" >&2
               exit 1
             fi
+            if [[ "${sync_method}" != "subtree" ]]; then
+              echo "::error::Unsupported sync_method '${sync_method}' for source ${name}. Use 'subtree'." >&2
+              exit 1
+            fi
 
-            clone_dir="${tmp_root}/${name}"
-            echo "Syncing ${name} (${repo}@${ref}) -> ${target_dir}"
-            git clone --depth 1 --branch "$ref" "$repo" "$clone_dir"
+            remote_name="upstream-$(printf '%s' "$name" | tr -cs '[:alnum:]' '-')"
+            remote_name="${remote_name%-}"
+            [[ -n "${remote_name}" ]] || remote_name="upstream-src"
 
-            mkdir -p "$target_dir"
-            rsync -a --delete --exclude '.git' "${clone_dir}/${source_dir}/" "${target_dir}/"
+            if git remote get-url "$remote_name" >/dev/null 2>&1; then
+              git remote set-url "$remote_name" "$repo"
+            else
+              git remote add "$remote_name" "$repo"
+            fi
+
+            echo "Syncing ${name} (${repo}@${ref}) via subtree -> ${target_dir}"
+            git fetch --depth 1 "$remote_name" "$ref"
+
+            if git log --all --grep="^git-subtree-dir: ${target_dir}$" --oneline | grep -q .; then
+              git subtree pull --prefix="$target_dir" "$remote_name" "$ref" --squash
+            else
+              if [[ -e "$target_dir" ]]; then
+                rm -rf "$target_dir"
+                git add -A "$target_dir" || true
+              fi
+              git subtree add --prefix="$target_dir" "$remote_name" "$ref" --squash
+            fi
+
+            git remote remove "$remote_name"
           done < <(jq -c "${jq_filter}" "$config_file")
 
           if [[ "$matched" -eq 0 ]]; then
@@ -95,15 +117,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if git diff --quiet; then
+          git fetch origin "${{ github.ref_name }}"
+
+          ahead="$(git rev-list --count "origin/${{ github.ref_name }}..HEAD" || echo 0)"
+          if ! git diff --quiet; then
+            git add -A
+            git commit -m "[ci] Sync upstream sources"
+            ahead="$(git rev-list --count "origin/${{ github.ref_name }}..HEAD" || echo 0)"
+          fi
+
+          if [[ "${ahead}" -eq 0 ]]; then
             echo "No upstream source changes detected."
             exit 0
           fi
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "[ci] Sync upstream sources"
           git push origin HEAD:${{ github.ref_name }}
 
       - name: Telegram notification

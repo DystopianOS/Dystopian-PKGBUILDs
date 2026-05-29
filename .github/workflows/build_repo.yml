@@ -85,7 +85,7 @@ jobs:
 
       - name: Prepare PKGBUILDs in Arch
         if: steps.resolve.outputs.has_packages == 'true'
-        uses: DCx7C5/actions/run-arch-cmd@v1
+        uses: DCx7C5/actions/arch-run-cmd@v1
         with:
           run-with-sudo: "true"
           enable-ccache: "true"

@@ -3,14 +3,7 @@
     "name": "dystopian-sbh",
     "repo": "https://github.com/DystopianOS/dystopian-sbh.git",
     "ref": "main",
-    "source_dir": ".",
-    "target_dir": "dystopian-sbh"
-  },
-  {
-    "name": "code-assistant-manager",
-    "repo": "https://github.com/Chat2AnyLLM/code-assistant-manager.git",
-    "ref": "main",
-    "source_dir": ".",
-    "target_dir": "code-assistant-manager/src/code-assistant-manager"
+    "target_dir": "dystopian-sbh",
+    "sync_method": "subtree"
   }
 ]

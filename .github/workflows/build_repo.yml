@@ -1,6 +1,17 @@
 name: Prepare PKGBUILDs and Dispatch Package Release
 
 on:
+  workflow_call:
+    inputs:
+      package:
+        description: Optional single package to process
+        required: false
+        type: string
+      channel:
+        description: Optional channel override (e.g. core, extra, x86_64)
+        required: false
+        default: core
+        type: string
   push:
     branches:
       - main
@@ -41,10 +52,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          manual_pkg="$(jq -r '.inputs.package // empty' "$GITHUB_EVENT_PATH")"
-          manual_channel="$(jq -r '.inputs.channel // "core"' "$GITHUB_EVENT_PATH")"
+          manual_pkg='${{ inputs.package || '' }}'
+          manual_channel='${{ inputs.channel || 'core' }}'
+          [[ -n "$manual_pkg" ]] || manual_pkg="$(jq -r '.inputs.package // empty' "$GITHUB_EVENT_PATH")"
+          [[ -n "$manual_channel" ]] || manual_channel="$(jq -r '.inputs.channel // "core"' "$GITHUB_EVENT_PATH")"
 
-          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && -n "$manual_pkg" ]]; then
+          if [[ ("${GITHUB_EVENT_NAME}" == "workflow_dispatch" || "${GITHUB_EVENT_NAME}" == "workflow_call") && -n "$manual_pkg" ]]; then
             mapfile -t pkgs < <(printf '%s\n' "$manual_pkg" | sed '/^$/d')
           else
             before="$(jq -r '.before // empty' "$GITHUB_EVENT_PATH")"

@@ -1,4 +1,88 @@
-name: build_repo.yml
+name: "Dispatch Repo Rebuild on PKGBUILDS Push"
+
 on:
+  push:
+    branches:
+      - main
+      - devel
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
+  detect-changed-packages:
+    runs-on: ubuntu-latest
+    outputs:
+      has_packages: ${{ steps.collect.outputs.has_packages }}
+      matrix: ${{ steps.collect.outputs.matrix }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Collect changed packages
+        id: collect
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          before="${{ github.event.before }}"
+          after="${{ github.sha }}"
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            before="$(git rev-parse HEAD~1 2>/dev/null || git rev-list --max-parents=0 HEAD | tail -n1)"
+          elif [[ "$before" == "0000000000000000000000000000000000000000" ]]; then
+            before="$(git rev-list --max-parents=0 "$after" | tail -n1)"
+          fi
+
+          mapfile -t changed_pkgs < <(
+            git diff --name-only "$before" "$after" \
+              | awk -F/ 'NF > 1 {print $1}' \
+              | sort -u
+          )
+
+          entries='[]'
+          for pkg in "${changed_pkgs[@]:-}"; do
+            [[ -z "$pkg" ]] && continue
+
+            version="unknown"
+            if [[ -f "$pkg/PKGBUILD" ]]; then
+              pkgver="$(awk -F= '/^pkgver=/{print $2; exit}' "$pkg/PKGBUILD")"
+              pkgrel="$(awk -F= '/^pkgrel=/{print $2; exit}' "$pkg/PKGBUILD")"
+              if [[ -n "${pkgver:-}" && -n "${pkgrel:-}" ]]; then
+                version="${pkgver}-${pkgrel}"
+              fi
+            fi
+
+            entries="$(jq -c --arg package "$pkg" --arg version "$version" '. += [{"package": $package, "version": $version}]' <<<"$entries")"
+          done
+
+          count="$(jq 'length' <<<"$entries")"
+          if [[ "$count" -eq 0 ]]; then
+            echo "has_packages=false" >> "$GITHUB_OUTPUT"
+            echo 'matrix={"include":[]}' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          matrix="$(jq -c '{include: .}' <<<"$entries")"
+          echo "has_packages=true" >> "$GITHUB_OUTPUT"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  dispatch-rebuild:
+    needs: detect-changed-packages
+    if: needs.detect-changed-packages.outputs.has_packages == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect-changed-packages.outputs.matrix) }}
+    steps:
+      - name: Dispatch package version bump event
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.REPO_DISPATCH_TOKEN }}
+          repository: DystopianOS/repo
+          event-type: pkgbuild-version-bump
+          client-payload: >-
+            {"package":"${{ matrix.package }}","version":"${{ matrix.version }}","source_repo":"DystopianOS/Dystopian-PKGBUILDS","source_sha":"${{ github.sha }}"}

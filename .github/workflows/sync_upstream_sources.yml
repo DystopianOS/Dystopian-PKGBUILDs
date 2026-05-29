@@ -1,0 +1,125 @@
+name: "Sync Upstream Sources"
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_name:
+        description: "Optional source name from .github/upstream-sources.json"
+        required: false
+        type: string
+      dry_run:
+        description: "Show changes without committing"
+        required: false
+        type: boolean
+        default: false
+  schedule:
+    - cron: "17 */6 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: "sync-upstream-sources"
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate GitHub App Token
+        id: app_token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.DYSTOPIANBOT_APP_ID }}
+          private-key: ${{ secrets.DYSTOPIANBOT_KEY }}
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app_token.outputs.token }}
+
+      - name: Sync configured upstream sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          config_file=".github/upstream-sources.json"
+          [[ -f "$config_file" ]] || { echo "::error::Missing $config_file"; exit 1; }
+
+          selection="${{ inputs.source_name }}"
+          jq_filter='.[]'
+          if [[ -n "${selection}" ]]; then
+            jq_filter=".[] | select(.name == \"${selection}\")"
+          fi
+
+          tmp_root="$(mktemp -d)"
+          trap 'rm -rf "$tmp_root"' EXIT
+
+          matched=0
+          while IFS= read -r row; do
+            [[ -z "${row}" ]] && continue
+            matched=$((matched + 1))
+
+            name="$(jq -r '.name' <<<"$row")"
+            repo="$(jq -r '.repo' <<<"$row")"
+            ref="$(jq -r '.ref // "main"' <<<"$row")"
+            source_dir="$(jq -r '.source_dir // "."' <<<"$row")"
+            target_dir="$(jq -r '.target_dir' <<<"$row")"
+
+            if [[ -z "${target_dir}" || "${target_dir}" == "null" ]]; then
+              echo "::error::target_dir is required for source ${name}" >&2
+              exit 1
+            fi
+
+            clone_dir="${tmp_root}/${name}"
+            echo "Syncing ${name} (${repo}@${ref}) -> ${target_dir}"
+            git clone --depth 1 --branch "$ref" "$repo" "$clone_dir"
+
+            mkdir -p "$target_dir"
+            rsync -a --delete --exclude '.git' "${clone_dir}/${source_dir}/" "${target_dir}/"
+          done < <(jq -c "${jq_filter}" "$config_file")
+
+          if [[ "$matched" -eq 0 ]]; then
+            echo "::error::No matching source entries found."
+            exit 1
+          fi
+
+      - name: Show changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git status --short
+
+      - name: Commit and push updates
+        if: ${{ !inputs.dry_run }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "No upstream source changes detected."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "[ci] Sync upstream sources"
+          git push origin HEAD:${{ github.ref_name }}
+
+      - name: Telegram notification
+        if: >-
+          always() &&
+          (secrets.TG_BOT_TOKEN != '' || secrets.TELEGRAM_BOT_TOKEN != '') &&
+          (secrets.TG_CHAT_ID != '' || secrets.TELEGRAM_CHAT_ID != '')
+        uses: DCx7C5/actions/tg-notify@v1
+        with:
+          tg-token: ${{ secrets.TG_BOT_TOKEN || secrets.TELEGRAM_BOT_TOKEN }}
+          chat-id: ${{ secrets.TG_CHAT_ID || secrets.TELEGRAM_CHAT_ID }}
+          parse-mode: "HTML"
+          message: >-
+            🔄 <b>Upstream source sync</b>%0A
+            Repo: <code>${{ github.repository }}</code>%0A
+            Source filter: <code>${{ inputs.source_name || 'all' }}</code>%0A
+            Dry run: <code>${{ inputs.dry_run || false }}</code>%0A
+            Result: <code>${{ job.status }}</code>%0A
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

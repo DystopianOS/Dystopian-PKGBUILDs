@@ -93,3 +93,28 @@ jobs:
           event-type: pkgbuild-version-bump
           client-payload: >-
             {"package":"${{ matrix.package }}","version":"${{ matrix.version }}","source_repo":"DystopianOS/Dystopian-PKGBUILDS","source_sha":"${{ github.sha }}"}
+
+  notify-telegram:
+    needs:
+      - detect-changed-packages
+      - dispatch-rebuild
+    if: >-
+      always() &&
+      (secrets.TG_BOT_TOKEN != '' || secrets.TELEGRAM_BOT_TOKEN != '') &&
+      (secrets.TG_CHAT_ID != '' || secrets.TELEGRAM_CHAT_ID != '')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Telegram notification
+        uses: DCx7C5/actions/tg-notify@v1
+        with:
+          tg-token: ${{ secrets.TG_BOT_TOKEN || secrets.TELEGRAM_BOT_TOKEN }}
+          chat-id: ${{ secrets.TG_CHAT_ID || secrets.TELEGRAM_CHAT_ID }}
+          parse-mode: "HTML"
+          message: >-
+            📦 <b>PKGBUILDS dispatch workflow</b>%0A
+            Repo: <code>${{ github.repository }}</code>%0A
+            Branch: <code>${{ github.ref_name }}</code>%0A
+            Detect job: <code>${{ needs.detect-changed-packages.result }}</code>%0A
+            Dispatch job: <code>${{ needs.dispatch-rebuild.result }}</code>%0A
+            Packages: <code>${{ needs.detect-changed-packages.outputs.matrix }}</code>%0A
+            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

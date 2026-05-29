@@ -43,9 +43,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          manual_pkg="$(jq -r '.inputs.package // empty' "$GITHUB_EVENT_PATH")"
+          manual_channel="$(jq -r '.inputs.channel // empty' "$GITHUB_EVENT_PATH")"
 
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.package }}" ]]; then
-            mapfile -t pkgs < <(printf '%s\n' "${{ github.event.inputs.package }}" | sed '/^$/d')
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "$manual_pkg" ]]; then
+            mapfile -t pkgs < <(printf '%s\n' "$manual_pkg" | sed '/^$/d')
           else
             before="${{ github.event.before }}"
             after="${{ github.sha }}"
@@ -74,7 +76,7 @@ jobs:
 
           entries='[]'
           for pkg in "${pkgs[@]}"; do
-            channel="${{ github.event.inputs.channel || 'core' }}"
+            channel="${manual_channel:-core}"
             if [[ -f "$channels_cfg" ]]; then
               mapped="$(jq -r --arg p "$pkg" '.[$p] // empty' "$channels_cfg" 2>/dev/null || true)"
               [[ -n "$mapped" ]] && channel="$mapped"

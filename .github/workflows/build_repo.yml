@@ -1,4 +1,4 @@
-name: "Prepare PKGBUILDs and Dispatch Package Release"
+name: Prepare PKGBUILDs and Dispatch Package Release
 
 on:
   push:
@@ -8,14 +8,12 @@ on:
   workflow_dispatch:
     inputs:
       package:
-        description: "Optional single package to process"
+        description: Optional single package to process
         required: false
-        type: string
       channel:
-        description: "Optional channel override (e.g. core, extra)"
+        description: Optional channel override (e.g. core, extra)
         required: false
-        default: "core"
-        type: string
+        default: core
 
 permissions:
   contents: write
@@ -44,14 +42,14 @@ jobs:
         run: |
           set -euo pipefail
           manual_pkg="$(jq -r '.inputs.package // empty' "$GITHUB_EVENT_PATH")"
-          manual_channel="$(jq -r '.inputs.channel // empty' "$GITHUB_EVENT_PATH")"
+          manual_channel="$(jq -r '.inputs.channel // "core"' "$GITHUB_EVENT_PATH")"
 
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "$manual_pkg" ]]; then
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && -n "$manual_pkg" ]]; then
             mapfile -t pkgs < <(printf '%s\n' "$manual_pkg" | sed '/^$/d')
           else
-            before="${{ github.event.before }}"
-            after="${{ github.sha }}"
-            if [[ "$before" == "0000000000000000000000000000000000000000" ]]; then
+            before="$(jq -r '.before // empty' "$GITHUB_EVENT_PATH")"
+            after="${GITHUB_SHA}"
+            if [[ -z "$before" || "$before" == "0000000000000000000000000000000000000000" ]]; then
               before="$(git rev-list --max-parents=0 "$after" | tail -n1)"
             fi
 
@@ -67,7 +65,7 @@ jobs:
 
           if (( ${#pkgs[@]} == 0 )); then
             echo "has_packages=false" >> "$GITHUB_OUTPUT"
-            echo 'packages_json=[]' >> "$GITHUB_OUTPUT"
+            echo "packages_json=[]" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -76,11 +74,9 @@ jobs:
 
           entries='[]'
           for pkg in "${pkgs[@]}"; do
-            channel="${manual_channel:-core}"
-            if [[ -f "$channels_cfg" ]]; then
-              mapped="$(jq -r --arg p "$pkg" '.[$p] // empty' "$channels_cfg" 2>/dev/null || true)"
-              [[ -n "$mapped" ]] && channel="$mapped"
-            fi
+            channel="$manual_channel"
+            mapped="$(jq -r --arg p "$pkg" '.[$p] // empty' "$channels_cfg" 2>/dev/null || true)"
+            [[ -n "$mapped" ]] && channel="$mapped"
             entries="$(jq -c --arg pkg "$pkg" --arg channel "$channel" '. += [{"package":$pkg,"channel":$channel}]' <<<"$entries")"
           done
 
@@ -98,9 +94,7 @@ jobs:
             set -euo pipefail
             pkgs='${{ steps.resolve.outputs.packages_json }}'
             mapfile -t pkg_list < <(jq -r '.[].package' <<<"$pkgs")
-
             for pkg in "${pkg_list[@]}"; do
-              echo "Preparing package: $pkg"
               cd "$pkg"
               updpkgsums
               makepkg --printsrcinfo > .SRCINFO
@@ -114,15 +108,13 @@ jobs:
         run: |
           set -euo pipefail
           if git diff --quiet; then
-            echo "No PKGBUILD metadata updates to commit."
             exit 0
           fi
-
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -m "[ci] Refresh PKGBUILD metadata"
-          git push origin HEAD:${{ github.ref_name }}
+          git push origin HEAD:${GITHUB_REF_NAME}
 
       - name: Dispatch package release events
         if: steps.resolve.outputs.has_packages == 'true'
@@ -133,39 +125,19 @@ jobs:
           set -euo pipefail
           pkgs='${{ steps.resolve.outputs.packages_json }}'
           source_sha="$(git rev-parse HEAD)"
-
           while IFS= read -r row; do
             pkg="$(jq -r '.package' <<<"$row")"
             channel="$(jq -r '.channel' <<<"$row")"
             pkgver="$(awk -F= '/^pkgver=/{print $2; exit}' "$pkg/PKGBUILD")"
             pkgrel="$(awk -F= '/^pkgrel=/{print $2; exit}' "$pkg/PKGBUILD")"
             version="${pkgver}-${pkgrel}"
-
             gh api repos/DystopianOS/repo/dispatches \
               -f event_type='pkgbuild-release-request' \
               -F client_payload="$(jq -c \
                 --arg package "$pkg" \
                 --arg version "$version" \
                 --arg channel "$channel" \
-                --arg source_repo "DystopianOS/Dystopian-PKGBUILDs" \
+                --arg source_repo "DystopianOS/Dystopian-PKGBuilds" \
                 --arg source_sha "$source_sha" \
                 '{package:$package,version:$version,channel:$channel,source_repo:$source_repo,source_sha:$source_sha}')"
           done < <(jq -c '.[]' <<<"$pkgs")
-
-      - name: Telegram notification
-        if: >-
-          always() &&
-          (secrets.TG_BOT_TOKEN != '' || secrets.TELEGRAM_BOT_TOKEN != '') &&
-          (secrets.TG_CHAT_ID != '' || secrets.TELEGRAM_CHAT_ID != '')
-        uses: DCx7C5/actions/tg-notify@v1
-        with:
-          tg-token: ${{ secrets.TG_BOT_TOKEN || secrets.TELEGRAM_BOT_TOKEN }}
-          chat-id: ${{ secrets.TG_CHAT_ID || secrets.TELEGRAM_CHAT_ID }}
-          parse-mode: "HTML"
-          message: >-
-            📦 <b>PKGBUILDS prepare+dispatch</b>%0A
-            Repo: <code>${{ github.repository }}</code>%0A
-            Branch: <code>${{ github.ref_name }}</code>%0A
-            Packages: <code>${{ steps.resolve.outputs.packages_json }}</code>%0A
-            Result: <code>${{ job.status }}</code>%0A
-            Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

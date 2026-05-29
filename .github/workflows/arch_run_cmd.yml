@@ -72,7 +72,7 @@ jobs:
 
       - name: Run Command in Arch Linux Container
         id: arch_run
-        uses: ./.github/actions/arch-run-cmd
+        uses: DCx7C5/actions/arch-run-cmd@v1
         with:
           command: ${{ inputs.command }}
           working-directory: ${{ inputs.working_directory }}

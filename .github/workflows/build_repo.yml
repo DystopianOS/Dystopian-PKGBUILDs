@@ -1,4 +1,4 @@
-name: "Dispatch Repo Rebuild on PKGBUILDS Push"
+name: "Prepare PKGBUILDs and Dispatch Package Release"
 
 on:
   push:
@@ -6,76 +6,23 @@ on:
       - main
       - devel
   workflow_dispatch:
+    inputs:
+      package:
+        description: "Optional single package to process"
+        required: false
+        type: string
+      channel:
+        description: "Optional channel override (e.g. core, extra)"
+        required: false
+        default: "core"
+        type: string
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  detect-changed-packages:
+  prepare-and-dispatch:
     runs-on: ubuntu-latest
-    outputs:
-      has_packages: ${{ steps.collect.outputs.has_packages }}
-      matrix: ${{ steps.collect.outputs.matrix }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Collect changed packages
-        id: collect
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          before="${{ github.event.before }}"
-          after="${{ github.sha }}"
-
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            before="$(git rev-parse HEAD~1 2>/dev/null || git rev-list --max-parents=0 HEAD | tail -n1)"
-          elif [[ "$before" == "0000000000000000000000000000000000000000" ]]; then
-            before="$(git rev-list --max-parents=0 "$after" | tail -n1)"
-          fi
-
-          mapfile -t changed_pkgs < <(
-            git diff --name-only "$before" "$after" \
-              | awk -F/ 'NF > 1 {print $1}' \
-              | sort -u
-          )
-
-          entries='[]'
-          for pkg in "${changed_pkgs[@]:-}"; do
-            [[ -z "$pkg" ]] && continue
-            [[ ! -f "$pkg/PKGBUILD" ]] && continue
-
-            version="unknown"
-            pkgver="$(awk -F= '/^pkgver=/{print $2; exit}' "$pkg/PKGBUILD")"
-            pkgrel="$(awk -F= '/^pkgrel=/{print $2; exit}' "$pkg/PKGBUILD")"
-            if [[ -n "${pkgver:-}" && -n "${pkgrel:-}" ]]; then
-              version="${pkgver}-${pkgrel}"
-            fi
-
-            entries="$(jq -c --arg package "$pkg" --arg version "$version" '. += [{"package": $package, "version": $version}]' <<<"$entries")"
-          done
-
-          count="$(jq 'length' <<<"$entries")"
-          if [[ "$count" -eq 0 ]]; then
-            echo "has_packages=false" >> "$GITHUB_OUTPUT"
-            echo 'matrix={"include":[]}' >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          matrix="$(jq -c '{include: .}' <<<"$entries")"
-          echo "has_packages=true" >> "$GITHUB_OUTPUT"
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-
-  dispatch-rebuild:
-    needs: detect-changed-packages
-    if: needs.detect-changed-packages.outputs.has_packages == 'true'
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.detect-changed-packages.outputs.matrix) }}
     steps:
       - name: Generate GitHub App Token
         id: app_token
@@ -85,36 +32,138 @@ jobs:
           private-key: ${{ secrets.DYSTOPIANBOT_KEY }}
           owner: DystopianOS
 
-      - name: Dispatch package version bump event
-        uses: peter-evans/repository-dispatch@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           token: ${{ steps.app_token.outputs.token }}
-          repository: DystopianOS/repo
-          event-type: pkgbuild-version-bump
-          client-payload: >-
-            {"package":"${{ matrix.package }}","version":"${{ matrix.version }}","source_repo":"DystopianOS/Dystopian-PKGBUILDS","source_sha":"${{ github.sha }}"}
 
-  notify-telegram:
-    needs:
-      - detect-changed-packages
-      - dispatch-rebuild
-    if: >-
-      always() &&
-      (secrets.TG_BOT_TOKEN != '' || secrets.TELEGRAM_BOT_TOKEN != '') &&
-      (secrets.TG_CHAT_ID != '' || secrets.TELEGRAM_CHAT_ID != '')
-    runs-on: ubuntu-latest
-    steps:
+      - name: Resolve package set
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.package }}" ]]; then
+            mapfile -t pkgs < <(printf '%s\n' "${{ inputs.package }}" | sed '/^$/d')
+          else
+            before="${{ github.event.before }}"
+            after="${{ github.sha }}"
+            if [[ "$before" == "0000000000000000000000000000000000000000" ]]; then
+              before="$(git rev-list --max-parents=0 "$after" | tail -n1)"
+            fi
+
+            mapfile -t pkgs < <(
+              git diff --name-only "$before" "$after" \
+                | awk -F/ 'NF > 1 {print $1}' \
+                | sort -u \
+                | while read -r p; do
+                    [[ -f "$p/PKGBUILD" ]] && printf '%s\n' "$p"
+                  done
+            )
+          fi
+
+          if (( ${#pkgs[@]} == 0 )); then
+            echo "has_packages=false" >> "$GITHUB_OUTPUT"
+            echo 'packages_json=[]' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          channels_cfg=".github/repo-channels.json"
+          [[ -f "$channels_cfg" ]] || echo '{}' > "$channels_cfg"
+
+          entries='[]'
+          for pkg in "${pkgs[@]}"; do
+            channel="${{ inputs.channel || 'core' }}"
+            if [[ -f "$channels_cfg" ]]; then
+              mapped="$(jq -r --arg p "$pkg" '.[$p] // empty' "$channels_cfg" 2>/dev/null || true)"
+              [[ -n "$mapped" ]] && channel="$mapped"
+            fi
+            entries="$(jq -c --arg pkg "$pkg" --arg channel "$channel" '. += [{"package":$pkg,"channel":$channel}]' <<<"$entries")"
+          done
+
+          echo "has_packages=true" >> "$GITHUB_OUTPUT"
+          echo "packages_json=$entries" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare PKGBUILDs in Arch
+        if: steps.resolve.outputs.has_packages == 'true'
+        uses: DCx7C5/actions/arch-run-cmd@v1
+        with:
+          run-with-sudo: "true"
+          enable-ccache: "true"
+          gh-token: ${{ steps.app_token.outputs.token }}
+          command: |
+            set -euo pipefail
+            pkgs='${{ steps.resolve.outputs.packages_json }}'
+            mapfile -t pkg_list < <(jq -r '.[].package' <<<"$pkgs")
+
+            for pkg in "${pkg_list[@]}"; do
+              echo "Preparing package: $pkg"
+              cd "$pkg"
+              updpkgsums
+              makepkg --printsrcinfo > .SRCINFO
+              makepkg --verifysource --noconfirm
+              cd - >/dev/null
+            done
+
+      - name: Commit PKGBUILD metadata refresh
+        if: steps.resolve.outputs.has_packages == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "No PKGBUILD metadata updates to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "[ci] Refresh PKGBUILD metadata"
+          git push origin HEAD:${{ github.ref_name }}
+
+      - name: Dispatch package release events
+        if: steps.resolve.outputs.has_packages == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          pkgs='${{ steps.resolve.outputs.packages_json }}'
+          source_sha="$(git rev-parse HEAD)"
+
+          while IFS= read -r row; do
+            pkg="$(jq -r '.package' <<<"$row")"
+            channel="$(jq -r '.channel' <<<"$row")"
+            pkgver="$(awk -F= '/^pkgver=/{print $2; exit}' "$pkg/PKGBUILD")"
+            pkgrel="$(awk -F= '/^pkgrel=/{print $2; exit}' "$pkg/PKGBUILD")"
+            version="${pkgver}-${pkgrel}"
+
+            gh api repos/DystopianOS/repo/dispatches \
+              -f event_type='pkgbuild-release-request' \
+              -F client_payload="$(jq -c \
+                --arg package "$pkg" \
+                --arg version "$version" \
+                --arg channel "$channel" \
+                --arg source_repo "DystopianOS/Dystopian-PKGBUILDs" \
+                --arg source_sha "$source_sha" \
+                '{package:$package,version:$version,channel:$channel,source_repo:$source_repo,source_sha:$source_sha}')"
+          done < <(jq -c '.[]' <<<"$pkgs")
+
       - name: Telegram notification
+        if: >-
+          always() &&
+          (secrets.TG_BOT_TOKEN != '' || secrets.TELEGRAM_BOT_TOKEN != '') &&
+          (secrets.TG_CHAT_ID != '' || secrets.TELEGRAM_CHAT_ID != '')
         uses: DCx7C5/actions/tg-notify@v1
         with:
           tg-token: ${{ secrets.TG_BOT_TOKEN || secrets.TELEGRAM_BOT_TOKEN }}
           chat-id: ${{ secrets.TG_CHAT_ID || secrets.TELEGRAM_CHAT_ID }}
           parse-mode: "HTML"
           message: >-
-            📦 <b>PKGBUILDS dispatch workflow</b>%0A
+            📦 <b>PKGBUILDS prepare+dispatch</b>%0A
             Repo: <code>${{ github.repository }}</code>%0A
             Branch: <code>${{ github.ref_name }}</code>%0A
-            Detect job: <code>${{ needs.detect-changed-packages.result }}</code>%0A
-            Dispatch job: <code>${{ needs.dispatch-rebuild.result }}</code>%0A
-            Packages: <code>${{ needs.detect-changed-packages.outputs.matrix }}</code>%0A
+            Packages: <code>${{ steps.resolve.outputs.packages_json }}</code>%0A
+            Result: <code>${{ job.status }}</code>%0A
             Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

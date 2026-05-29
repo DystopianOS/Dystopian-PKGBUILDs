@@ -46,14 +46,13 @@ jobs:
           entries='[]'
           for pkg in "${changed_pkgs[@]:-}"; do
             [[ -z "$pkg" ]] && continue
+            [[ ! -f "$pkg/PKGBUILD" ]] && continue
 
             version="unknown"
-            if [[ -f "$pkg/PKGBUILD" ]]; then
-              pkgver="$(awk -F= '/^pkgver=/{print $2; exit}' "$pkg/PKGBUILD")"
-              pkgrel="$(awk -F= '/^pkgrel=/{print $2; exit}' "$pkg/PKGBUILD")"
-              if [[ -n "${pkgver:-}" && -n "${pkgrel:-}" ]]; then
-                version="${pkgver}-${pkgrel}"
-              fi
+            pkgver="$(awk -F= '/^pkgver=/{print $2; exit}' "$pkg/PKGBUILD")"
+            pkgrel="$(awk -F= '/^pkgrel=/{print $2; exit}' "$pkg/PKGBUILD")"
+            if [[ -n "${pkgver:-}" && -n "${pkgrel:-}" ]]; then
+              version="${pkgver}-${pkgrel}"
             fi
 
             entries="$(jq -c --arg package "$pkg" --arg version "$version" '. += [{"package": $package, "version": $version}]' <<<"$entries")"
@@ -78,10 +77,18 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.detect-changed-packages.outputs.matrix) }}
     steps:
+      - name: Generate GitHub App Token
+        id: app_token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.DYSTOPIANBOT_APP_ID }}
+          private-key: ${{ secrets.DYSTOPIANBOT_KEY }}
+          owner: DystopianOS
+
       - name: Dispatch package version bump event
         uses: peter-evans/repository-dispatch@v3
         with:
-          token: ${{ secrets.REPO_DISPATCH_TOKEN }}
+          token: ${{ steps.app_token.outputs.token }}
           repository: DystopianOS/repo
           event-type: pkgbuild-version-bump
           client-payload: >-

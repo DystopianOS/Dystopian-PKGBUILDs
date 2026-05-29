@@ -4,7 +4,7 @@
 
 pkgname=dystopian-hooks
 pkgver=0.1.0
-pkgrel=1
+pkgrel=3
 pkgdesc="A package for Dystopian ALPM Hooks"
 arch=('any')
 license=('GPL-3.0-or-later')
@@ -49,10 +49,10 @@ package() {
   install -Dm644 bundle-remove.hook "$pkgdir/usr/share/libalpm/hooks/bundle-remove.hook"
   install -Dm644 orphans.hook "$pkgdir/usr/share/libalpm/hooks/orphans.hook"
   install -Dm644 pacnew-check.hook "$pkgdir/usr/share/libalpm/hooks/pacnew-check.hook"
-  
+  install -Dm644 cuda-pascal-guard.hook "$pkgdir/usr/share/libalpm/hooks/cuda-pascal-guard.hook"
+
   install -Dm755 dystopian-reboot-required "$pkgdir/usr/share/libalpm/scripts/dystopian-reboot-required"
-  install -Dm755 update-initramfs "$pkgdir/usr/bin/update-initramfs"
-  install -Dm755 nvidia-driver-switch "$pkgdir/usr/local/bin/nvidia-driver-switch"
+  install -Dm755 cuda-pascal-guard "$pkgdir/usr/local/bin/cuda-pascal-guard"
   install -Dm755 dystopian-hooks-runner "$pkgdir/usr/bin/dystopian-hooks-runner"
 }
 

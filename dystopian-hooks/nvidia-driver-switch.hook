@@ -18,4 +18,4 @@ Target = nvidia*-lts
 Description = Auto-switch NVIDIA driver mode (built-in kernel vs LKM)
 When = PostTransaction
 NeedsTargets
-Exec = /usr/local/bin/nvidia-driver-switch
+Exec = /usr/bin/bash -c 'dystopian-hooks-runner "nvidia-driver-switch" "$@"'

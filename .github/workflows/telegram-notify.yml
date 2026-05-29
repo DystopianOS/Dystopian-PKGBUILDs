@@ -43,17 +43,50 @@ jobs:
     if: ${{ github.event_name == 'workflow_run' && (github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure') }}
     runs-on: ubuntu-latest
     steps:
+      - name: Build workflow-specific message
+        id: build_message
+        env:
+          REPOSITORY: ${{ github.repository }}
+          WORKFLOW: ${{ github.event.workflow_run.name }}
+          STATUS: ${{ github.event.workflow_run.conclusion }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+          EVENT_NAME: ${{ github.event.workflow_run.event }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          commit_json="$(curl -fsSL \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${REPOSITORY}/commits/${HEAD_SHA}")"
+
+          short_sha="${HEAD_SHA:0:8}"
+          commit_title="$(printf '%s' "$commit_json" | jq -r '.commit.message | split("\n")[0] | @html')"
+          commit_author="$(printf '%s' "$commit_json" | jq -r '.commit.author.name | @html')"
+          changed_files="$(printf '%s' "$commit_json" | jq -r '[.files[].filename] | .[:8] | join(", ") | @html')"
+          changed_count="$(printf '%s' "$commit_json" | jq -r '.files | length')"
+
+          if [ -z "$changed_files" ] || [ "$changed_files" = "null" ]; then
+            changed_files="n/a"
+          fi
+
+          {
+            echo "message<<EOF"
+            echo "<b>⚙️ ${WORKFLOW}</b>"
+            echo ""
+            echo "<b>Status:</b> <code>${STATUS}</code>  |  <b>Event:</b> <code>${EVENT_NAME}</code>"
+            echo "<b>Branch:</b> <code>${BRANCH}</code>"
+            echo "<b>Commit:</b> <code>${short_sha}</code> by <code>${commit_author}</code>"
+            echo "<b>Title:</b> <code>${commit_title}</code>"
+            echo "<b>Changed files (${changed_count}):</b> <code>${changed_files}</code>"
+            echo "<b>Run:</b> <a href=\"${RUN_URL}\">Open workflow run</a>"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Notify Telegram (workflow)
         uses: DCx7C5/actions/tg-notify@v1
         with:
           tg-token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           chat-id: ${{ secrets.TELEGRAM_CHANNEL_ID }}
           parse-mode: HTML
-          message: |
-            <b>⚙️ Workflow Completed</b>
-
-            <b>Repository:</b> <code>${{ github.repository }}</code>
-            <b>Workflow:</b> <code>${{ github.event.workflow_run.name }}</code>
-            <b>Status:</b> <code>${{ github.event.workflow_run.conclusion }}</code>
-            <b>Branch:</b> <code>${{ github.event.workflow_run.head_branch }}</code>
-            <b>Run:</b> <a href="${{ github.event.workflow_run.html_url }}">Open workflow run</a>
+          message: ${{ steps.build_message.outputs.message }}

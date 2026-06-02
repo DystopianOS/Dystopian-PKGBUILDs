@@ -5,5 +5,12 @@
     "ref": "main",
     "target_dir": "dystopian-sbh",
     "sync_method": "subtree"
+  },
+  {
+    "name": "jetbrains-toolbox",
+    "repo": "https://github.com/BeyondAUR/jetbrains-toolbox.git",
+    "ref": "master",
+    "target_dir": "jetbrains-toolbox",
+    "sync_method": "subtree"
   }
 ]

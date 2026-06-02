@@ -1,0 +1,22 @@
+pkgbase = ollama-pascal
+	pkgdesc = Create, run and share large language models (optimized for GTX 1050 Ti + i5-8600K)
+	pkgver = 0.30.0
+	pkgrel = 1
+	url = https://github.com/ollama/ollama
+	arch = x86_64
+	license = MIT
+	makedepends = go
+	makedepends = git
+	makedepends = cmake
+	makedepends = ninja
+	makedepends = cuda-pascal
+	depends = cuda-12.9
+	depends = cudnn9.10-cuda12.9
+	depends = glibc
+	provides = ollama
+	conflicts = ollama
+	conflicts = ollama-bin
+	source = git+https://github.com/ollama/ollama.git#tag=v0.30.0
+	sha256sums = SKIP
+
+pkgname = ollama-pascal

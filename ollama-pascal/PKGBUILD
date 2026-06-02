@@ -1,0 +1,65 @@
+# Maintainer: Your Name
+pkgname=ollama-pascal
+pkgver=0.30.0
+pkgrel=1
+pkgdesc="Create, run and share large language models (optimized for GTX 1050 Ti + i5-8600K)"
+arch=('x86_64')
+url="https://github.com/ollama/ollama"
+license=('MIT')
+depends=('cuda-12.9' 'cudnn9.10-cuda12.9' 'glibc')
+makedepends=('go' 'git' 'cmake' 'ninja' 'cuda-pascal')
+provides=('ollama')
+conflicts=('ollama' 'ollama-bin')
+
+source=("git+https://github.com/ollama/ollama.git#tag=v${pkgver}")
+sha256sums=('SKIP')
+
+build() {
+  cd "${srcdir}/ollama"
+
+  mkdir -p build && cd build
+
+  cmake .. \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DOLLAMA_LLAMA_BACKENDS=cuda_v12 \
+    -DCMAKE_CUDA_ARCHITECTURES=61 \
+    -DCMAKE_C_FLAGS="-march=skylake -mtune=skylake -O3" \
+    -DCMAKE_CXX_FLAGS="-march=skylake -mtune=skylake -O3" \
+    -DGGML_CUDA_FA=ON \
+    -DGGML_AVX=ON \
+    -DGGML_AVX2=ON \
+    -DGGML_FMA=ON \
+    -GNinja
+
+  ninja -j$(nproc)
+}
+
+package() {
+  cd "${srcdir}/ollama/build"
+
+  install -Dm755 bin/ollama "${pkgdir}/usr/bin/ollama"
+
+  # Systemd service
+  install -Dm644 /dev/stdin "${pkgdir}/usr/lib/systemd/system/ollama.service" << EOF
+[Unit]
+Description=Ollama Service
+After=network.target
+
+[Service]
+Type=simple
+User=ollama
+Group=ollama
+ExecStart=/usr/bin/ollama serve
+Environment="OLLAMA_HOST=0.0.0.0"
+Environment="OLLAMA_FLASH_ATTENTION=1"
+Restart=always
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  install -Dm644 /dev/stdin "${pkgdir}/usr/lib/sysusers.d/ollama.conf" << EOF
+u ollama - "Ollama Server" - /usr/lib/ollama
+EOF
+}

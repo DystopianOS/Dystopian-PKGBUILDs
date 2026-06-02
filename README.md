@@ -29,8 +29,9 @@
 ```
 Dystopian-PKGBUILDS/
 ├── .github/workflows/
-│   ├── package-auto-update.yml     # Main package update workflow
-│   └── submodule-fork-monitor.yml  # Submodule and fork synchronization
+│   ├── build-packages.yml          # Main build workflow: on-push checksums (sha512+b2), .SRCINFO, makepkg, artifacts + dispatch
+│   ├── package-auto-update.yml     # Upstream version detection & PKGBUILD bumps
+│   └── ... (see .github/workflows for full list: cleanup, manual arch-run, etc.)
 ├── scripts/
 │   └── package-analyzer.sh         # Local analysis and management script
 ├── package-config.yml              # Global configuration
@@ -266,6 +267,14 @@ The system automatically detects build systems based on configuration files:
 | **CMake** | `CMakeLists.txt` | `cmake`, `make` |
 
 ## 🚨 Update Strategies
+
+**Important distinction (Dystopian Archivist rule):**
+
+- **Own source code** (anything hosted under `DystopianOS/*` or `Dystopian-Project/*` orgs): the PKGBUILD always uses the exact same clean release/tag version number as the upstream project. Detection forces `github-release` / tag priority even when `source=` uses `git+...`. This keeps `pkgver` matching your tags (e.g. `0.1.0`, `1.5.1`) and works with `#tag=$pkgver` / `#tag=v${pkgver}` pinning.
+
+- **External / clones of other PKGBUILDs**: follow best practices for the source. Git-based externals use improved rolling versions (`YYYYMMDD.gSHA` derived from the actual upstream HEAD commit date + short SHA) so the baked `pkgver` only changes on real source advances (no more bogus daily `date.r1.sha`).
+
+The automation in `package-auto-update.yml` and `scripts/package-analyzer.sh` implements the above. `updpkgsums` + validation + proper `pkgrel=1` reset on upstream version bumps are always applied.
 
 ### 1. **Release-First Strategy** (Recommended)
 ```

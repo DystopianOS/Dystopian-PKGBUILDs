@@ -1,0 +1,291 @@
+name: "Build Packages (main)"
+
+on:
+  workflow_call:
+    inputs:
+      package:
+        description: Optional single package to process
+        required: false
+        type: string
+      channel:
+        description: Optional channel override (e.g. core, extra)
+        required: false
+        default: core
+        type: string
+  push:
+    branches:
+      - main
+      - devel
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Optional single package to process
+        required: false
+      channel:
+        description: Optional channel override (e.g. core, extra)
+        required: false
+        default: core
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate GitHub App Token
+        id: app_token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.DYSTOPIANBOT_CLIENT_ID }}
+          private-key: ${{ secrets.DYSTOPIANBOT_KEY }}
+          owner: DystopianOS
+          repositories: |
+            repo
+            Dystopian-PKGBUILDS
+
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app_token.outputs.token }}
+
+      - name: Resolve package set
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          manual_pkg='${{ inputs.package || '' }}'
+          manual_channel='${{ inputs.channel || 'core' }}'
+          [[ -n "$manual_pkg" ]] || manual_pkg="$(jq -r '.inputs.package // empty' "$GITHUB_EVENT_PATH")"
+          [[ -n "$manual_channel" ]] || manual_channel="$(jq -r '.inputs.channel // "core"' "$GITHUB_EVENT_PATH")"
+
+          if [[ ("${GITHUB_EVENT_NAME}" == "workflow_dispatch" || "${GITHUB_EVENT_NAME}" == "workflow_call") && -n "$manual_pkg" ]]; then
+            # support single or multiple (space/comma separated) for manual triggers
+            mapfile -t pkgs < <(printf '%s\n' "$manual_pkg" | tr ', ' '\n' | sed '/^$/d')
+          else
+            before="$(jq -r '.before // empty' "$GITHUB_EVENT_PATH")"
+            after="${GITHUB_SHA}"
+            if [[ -z "$before" || "$before" == "0000000000000000000000000000000000000000" ]]; then
+              before="$(git rev-list --max-parents=0 "$after" | tail -n1)"
+            fi
+
+            mapfile -t pkgs < <(
+              git diff --name-only "$before" "$after" \
+                | awk -F/ 'NF > 1 {print $1}' \
+                | sort -u \
+                | while read -r p; do
+                    [[ -f "$p/PKGBUILD" ]] && printf '%s\n' "$p"
+                  done
+            )
+          fi
+
+          if (( ${#pkgs[@]} == 0 )); then
+            echo "has_packages=false" >> "$GITHUB_OUTPUT"
+            echo "packages_json=[]" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          channels_cfg=".github/repo-channels.json"
+          [[ -f "$channels_cfg" ]] || echo '{}' > "$channels_cfg"
+
+          entries='[]'
+          for pkg in "${pkgs[@]}"; do
+            channel="$manual_channel"
+            mapped="$(jq -r --arg p "$pkg" '.[$p] // empty' "$channels_cfg" 2>/dev/null || true)"
+            [[ -n "$mapped" ]] && channel="$mapped"
+            entries="$(jq -c --arg pkg "$pkg" --arg channel "$channel" '. += [{"package":$pkg,"channel":$channel}]' <<<"$entries")"
+          done
+
+          echo "has_packages=true" >> "$GITHUB_OUTPUT"
+          echo "packages_json=$entries" >> "$GITHUB_OUTPUT"
+
+      - name: Check for build skip marker (from our own metadata commits)
+        id: skip
+        if: steps.resolve.outputs.has_packages == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_EVENT_NAME}" == "push" && "${{ github.event.head_commit.message }}" == *"[ci skip build]"* ]]; then
+            echo "skip_build=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping build due to [ci skip build] marker in triggering commit."
+          else
+            echo "skip_build=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Prepare checksums (.SRCINFO) + build packages in Arch
+        if: steps.resolve.outputs.has_packages == 'true' && steps.skip.outputs.skip_build != 'true'
+        uses: DCx7C5/actions/arch-run-cmd@v1
+        with:
+          run-with-sudo: "true"
+          enable-ccache: "true"
+          gh-token: ${{ steps.app_token.outputs.token }}
+          command: |
+            set -euo pipefail
+            pkgs='${{ steps.resolve.outputs.packages_json }}'
+            mapfile -t pkg_list < <(jq -r '.[].package' <<<"$pkgs")
+            for pkg in "${pkg_list[@]}"; do
+              echo "=== Processing package: $pkg ==="
+              cd "$pkg"
+
+              # Normalize to ALWAYS sha512sums + b2sums (blake2). Remove legacy sha256/md5/etc.
+              # This is a deliberate policy change for this repo.
+              # Robust removal supports multi-line array declarations (e.g. keyring with SKIP per file).
+              python3 - <<'PYEOF' || true
+import re
+with open('PKGBUILD') as f:
+    content = f.read()
+
+# Remove *all* sums declarations (shaNsums, b2, md5, ck), handling multi-line indented values.
+sums_pattern = r'(?m)^[ \t]*(?:sha[0-9]*|b2|md5|ck)sums\s*=[^\n]*(?:\n[ \t]+[^\n]*)*'
+content = re.sub(sums_pattern, '', content)
+
+# Ensure exactly sha512 + b2 are present. Insert before first func (pkgver/package_*/package) so
+# it works for split packages (no top-level package()) like dystopian-keyring as well as regular ones.
+if 'sha512sums=' not in content:
+    func_match = re.search(r'\n(?=[_a-zA-Z][_a-zA-Z0-9]*\s*\()', content)
+    if func_match:
+        insert_pos = func_match.start() + 1
+        content = content[:insert_pos] + 'sha512sums=()\nb2sums=()\n' + content[insert_pos:]
+    else:
+        content = content.rstrip() + '\n\nsha512sums=()\nb2sums=()\n'
+else:
+    # sha512 present but maybe no b2 (legacy)
+    if 'b2sums=' not in content:
+        content = re.sub(r'(sha512sums=.*?)(?=\n[a-zA-Z]|\Z)', r'\1\nb2sums=()\n', content, flags=re.DOTALL, count=1)
+
+with open('PKGBUILD', 'w') as f:
+    f.write(content)
+print("Normalized PKGBUILD checksum declarations to sha512 + b2")
+PYEOF
+
+              updpkgsums
+              makepkg --verifysource --noconfirm
+
+              echo "Building package (makepkg)..."
+              makepkg -s --noconfirm --clean --cleanbuild --syncdeps
+
+              # (re)generate .SRCINFO *after* build. For packages with pkgver() (dystopian-keyring,
+              # dystopian-settings etc), the full makepkg run will have invoked update_pkgver()
+              # which mutates PKGBUILD in-place to the computed version (and resets pkgrel=1).
+              # Generating after ensures .SRCINFO and the PKGBUILD on disk (used by dispatch awk)
+              # are consistent with the version of the just-built artifacts. This is essential
+              # for manual `workflow_dispatch` builds of dystopian-repo / dystopian-keyring to
+              # succeed end-to-end (no version mismatch, correct dispatch payload).
+              makepkg --printsrcinfo > .SRCINFO
+
+              cd - >/dev/null
+              echo "=== Done: $pkg ==="
+            done
+
+      - name: Stage PKGBUILD metadata changes
+        if: steps.resolve.outputs.has_packages == 'true' && steps.skip.outputs.skip_build != 'true'
+        uses: DCx7C5/actions/git-stage-changes@v1
+        with:
+          paths: |
+            */PKGBUILD
+            */.SRCINFO
+
+      - name: Commit PKGBUILD metadata refresh
+        if: steps.resolve.outputs.has_packages == 'true' && steps.skip.outputs.skip_build != 'true'
+        uses: DCx7C5/actions/git-commit@v1
+        with:
+          message: |
+            [ci] Refresh PKGBUILD metadata (sha512 + b2)
+
+            Automated by Dystopian build system
+          skip-if-no-changes: true
+          gh-token: ${{ steps.app_token.outputs.token }}
+
+      - name: Push metadata changes
+        if: steps.resolve.outputs.has_packages == 'true' && steps.skip.outputs.skip_build != 'true'
+        uses: DCx7C5/actions/git-push-changes@v1
+        with:
+          gh-token: ${{ steps.app_token.outputs.token }}
+
+      - name: Upload built packages to workflow artifacts
+        if: steps.resolve.outputs.has_packages == 'true' && steps.skip.outputs.skip_build != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ github.run_number }}
+          path: |
+            */*.pkg.tar.zst
+            */*.pkg.tar.zst.sig
+            */*.pkg.tar.xz
+            */*.pkg.tar.gz
+          retention-days: 30
+          compression-level: 0
+          if-no-files-found: warn
+
+      - name: Dispatch pkgbuild-built events (with artifact pointers)
+        if: steps.resolve.outputs.has_packages == 'true' && steps.skip.outputs.skip_build != 'true'
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          pkgs='${{ steps.resolve.outputs.packages_json }}'
+          source_sha="$(git rev-parse HEAD)"
+          run_id="${{ github.run_id }}"
+          artifact_name="packages-${{ github.run_number }}"
+          while IFS= read -r row; do
+            pkg="$(jq -r '.package' <<<"$row")"
+            channel="$(jq -r '.channel' <<<"$row")"
+            pkgver="$(awk -F= '/^pkgver=/{print $2; exit}' "$pkg/PKGBUILD")"
+            pkgrel="$(awk -F= '/^pkgrel=/{print $2; exit}' "$pkg/PKGBUILD")"
+            version="${pkgver}-${pkgrel}"
+
+            # Locate the just-built package file for this pkg (prefer .zst)
+            pkg_file=$(find "$pkg" -maxdepth 1 -name "${pkg}-${version}-*.pkg.tar.zst" -o -name "${pkg}-${version}-*.pkg.tar.*" | head -1 || true)
+            pkg_sha256=""
+            if [[ -n "$pkg_file" && -f "$pkg_file" ]]; then
+              pkg_sha256="$(sha256sum "$pkg_file" | awk '{print $1}')"
+            fi
+
+            echo "Dispatching pkgbuild-built for ${pkg}-${version} (artifact: ${artifact_name}, sha256=${pkg_sha256:0:12}...)"
+
+            gh api repos/DystopianOS/repo/dispatches \
+              -f event_type='pkgbuild-built' \
+              -F client_payload="$(jq -c \
+                --arg package "$pkg" \
+                --arg version "$version" \
+                --arg channel "$channel" \
+                --arg source_sha "$source_sha" \
+                --arg trigger "pkgbuild-built" \
+                --arg aur_db_repository "DystopianOS/repo" \
+                --arg package_sha256 "$pkg_sha256" \
+                --arg artifact_run_id "$run_id" \
+                --arg artifact_name "$artifact_name" \
+                '{package:$package,version:$version,channel:$channel,source_sha:$source_sha,trigger:$trigger,aur_db_repository:$aur_db_repository,package_sha256:$package_sha256,artifact_run_id:$artifact_run_id,artifact_name:$artifact_name}')"
+          done < <(jq -c '.[]' <<<"$pkgs")
+
+      - name: Build summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "## 🏗️ Dystopian PKGBUILD Build"
+            echo ""
+            echo "**Trigger**: ${{ github.event_name }}"
+            echo "**SHA**: \`${{ github.sha }}\`"
+            echo ""
+            if [[ "${{ steps.resolve.outputs.has_packages }}" == "true" ]]; then
+              echo "### Packages processed"
+              echo '```json'
+              echo '${{ steps.resolve.outputs.packages_json }}'
+              echo '```'
+              if [[ "${{ steps.skip.outputs.skip_build }}" == "true" ]]; then
+                echo ""
+                echo "> ⏭️ Build skipped due to [ci skip build] marker."
+              else
+                echo ""
+                echo "✅ Checksums normalized to **sha512sums + b2sums**"
+                echo "✅ .SRCINFO refreshed"
+                echo "✅ Full makepkg build executed"
+                echo "📦 Artifact: \`packages-${{ github.run_number }}\` (if builds produced files)"
+              fi
+            else
+              echo "No packages with PKGBUILD changes detected."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

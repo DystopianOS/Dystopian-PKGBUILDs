@@ -26,7 +26,7 @@ log() {
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
 
     case "$level" in
-        "debug") [[ "$LOG_LEVEL" == "debug" ]] && echo -e "${PURPLE}[$timestamp] DEBUG:${NC} $*" ;;
+        "debug") if [[ "$LOG_LEVEL" == "debug" ]]; then echo -e "${PURPLE}[$timestamp] DEBUG:${NC} $*" ; fi ;;
         "info")  echo -e "${CYAN}[$timestamp] INFO:${NC} $*" ;;
         "warn")  echo -e "${YELLOW}[$timestamp] WARN:${NC} $*" ;;
         "error") echo -e "${RED}[$timestamp] ERROR:${NC} $*" ;;
@@ -82,9 +82,11 @@ detect_package_type() {
     local update_method=""
 
     if [[ -f "$pkg_dir/PKGBUILD" ]]; then
-        # Source the PKGBUILD to extract variables
+        # Source the PKGBUILD to extract variables (defensively: some PKGBUILDs are
+        # not safe to source under set -u or have side effects; we only care about source=)
         (
             cd "$pkg_dir"
+            set +u  # disable unbound checking inside sourced PKGBUILD
             source PKGBUILD 2>/dev/null || true
 
             if [[ -n "${source:-}" ]]; then
@@ -157,6 +159,16 @@ scan_packages() {
         local pkg_info=$(detect_package_type "$pkg_dir")
         IFS='|' read -r pkg_type source_url update_method <<< "$pkg_info"
 
+        # Dystopian Archivist rule: packages with sources in DystopianOS org repos
+        # are our own source code → use the exact same clean release/tag version
+        # number in the PKGBUILD (never the date.rN synthetic for our stuff).
+        if [[ "$source_url" =~ DystopianOS/ || "$source_url" =~ Dystopian-Project/ ]]; then
+            if [[ "$update_method" != "submodule-update" ]]; then
+                update_method="github-release"
+                pkg_type="github"
+            fi
+        fi
+
         if [[ -n "$type_filter" ]] && [[ "$pkg_type" != "$type_filter" ]]; then
             log debug "Skipping $pkg_name (type $pkg_type doesn't match filter $type_filter)"
             continue
@@ -164,13 +176,11 @@ scan_packages() {
 
         local build_method=$(detect_build_method "$pkg_dir")
 
-        # Get current version
-        local current_version=""
-        (
-            cd "$pkg_dir"
-            source PKGBUILD 2>/dev/null || true
-            current_version="${pkgver:-unknown}"
-        )
+        # Get current version safely (some PKGBUILDs are not pure when sourced)
+        local current_version="unknown"
+        if [[ -f "$pkg_dir/PKGBUILD" ]]; then
+          current_version=$( (cd "$pkg_dir" && source ./PKGBUILD 2>/dev/null || true; echo "${pkgver:-unknown}") 2>/dev/null || echo "unknown" )
+        fi
 
         # Check for additional configuration files
         local config_files=()
@@ -248,11 +258,14 @@ check_git_commit() {
 
     log debug "Checking latest git commit for $repo_path"
 
-    local latest_commit=$(curl -s "https://api.github.com/repos/$repo_path/commits" 2>/dev/null | jq -r '.[0].sha[0:7] // empty')
+    local latest_json=$(curl -s "https://api.github.com/repos/$repo_path/commits?per_page=1" 2>/dev/null)
+    local latest_commit=$(echo "$latest_json" | jq -r '.[0].sha[0:7] // empty')
     if [[ -n "$latest_commit" ]]; then
-        local current_date=$(date +%Y.%m.%d)
-        local commit_count=$(curl -s "https://api.github.com/repos/$repo_path/commits?per_page=1" 2>/dev/null | jq -r 'length')
-        local git_version="${current_date}.r${commit_count}.${latest_commit}"
+        # Better git rolling version for external clones (best practice-ish):
+        # Use the actual commit's date + gSHA so version only advances on real upstream changes.
+        local cdate=$(echo "$latest_json" | jq -r '.[0].commit.committer.date // .[0].commit.author.date // empty' | cut -d'T' -f1 | tr -d '-')
+        [[ -z "$cdate" || "$cdate" == "null" ]] && cdate=$(date +%Y%m%d)
+        local git_version="${cdate}.g${latest_commit}"
         echo "$git_version|git|$latest_commit"
     else
         echo "||"
@@ -284,13 +297,16 @@ check_package_updates() {
         local pkg_info=$(detect_package_type "$pkg_dir")
         IFS='|' read -r pkg_type source_url update_method <<< "$pkg_info"
 
-        # Get current version
-        local current_version=""
-        (
-            cd "$pkg_dir"
-            source PKGBUILD 2>/dev/null || true
-            current_version="${pkgver:-unknown}"
-        )
+        # Dystopian Archivist rule: own DystopianOS org sources use clean release version
+        if [[ "$source_url" =~ DystopianOS/ || "$source_url" =~ Dystopian-Project/ ]]; then
+            update_method="github-release"
+        fi
+
+        # Get current version safely (some PKGBUILDs are not pure when sourced)
+        local current_version="unknown"
+        if [[ -f "$pkg_dir/PKGBUILD" ]]; then
+          current_version=$( (cd "$pkg_dir" && source ./PKGBUILD 2>/dev/null || true; echo "${pkgver:-unknown}") 2>/dev/null || echo "unknown" )
+        fi
 
         log debug "Package type: $pkg_type, Update method: $update_method"
         log debug "Current version: $current_version"

@@ -26,3 +26,9 @@ AGENT-*.yml
 AGENT-*.json
 AGENT-*.log
 AGENT-*.env
+
+# Built Arch packages (never committed; delivered via artifacts + repo/ sync)
+*.pkg.tar.zst
+*.pkg.tar.xz
+*.pkg.tar.gz
+*.pkg.tar.*

@@ -58,7 +58,8 @@ jobs:
           [[ -n "$manual_channel" ]] || manual_channel="$(jq -r '.inputs.channel // "core"' "$GITHUB_EVENT_PATH")"
 
           if [[ ("${GITHUB_EVENT_NAME}" == "workflow_dispatch" || "${GITHUB_EVENT_NAME}" == "workflow_call") && -n "$manual_pkg" ]]; then
-            mapfile -t pkgs < <(printf '%s\n' "$manual_pkg" | sed '/^$/d')
+            # support single or multiple (space/comma separated) for manual triggers
+            mapfile -t pkgs < <(printf '%s\n' "$manual_pkg" | tr ', ' '\n' | sed '/^$/d')
           else
             before="$(jq -r '.before // empty' "$GITHUB_EVENT_PATH")"
             after="${GITHUB_SHA}"

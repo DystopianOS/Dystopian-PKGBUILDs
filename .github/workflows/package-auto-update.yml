@@ -132,6 +132,16 @@ jobs:
             update_method="submodule-update"
           fi
 
+          # Dystopian Archivist rule: anything with sources in DystopianOS org repos
+          # is our own source code. Use the exact same release version number in the
+          # PKGBUILD (clean tag/release, never synthetic date.rN for our code).
+          if [[ "$source_url" =~ DystopianOS/ || "$source_url" =~ Dystopian-Project/ ]]; then
+            if [[ "$update_method" != "submodule-update" ]]; then
+              update_method="github-release"
+              pkg_type="github"
+            fi
+          fi
+
           # Add package to JSON array
           local package_info=$(jq -n \
             --arg name "$pkg_name" \
@@ -285,13 +295,15 @@ jobs:
           "git-commit")
             echo "🔄 Checking git commits..."
             repo_path=$(echo "$source_url" | sed 's|https://github.com/||')
-            latest_commit=$(curl -s "https://api.github.com/repos/$repo_path/commits" | jq -r '.[0].sha[0:7]')
+            latest_json=$(curl -s "https://api.github.com/repos/$repo_path/commits?per_page=1")
+            latest_commit=$(echo "$latest_json" | jq -r '.[0].sha[0:7]')
 
             if [[ -n "$latest_commit" ]]; then
-              # Generate new version with current date and commit
-              current_date=$(date +%Y.%m.%d)
-              commit_count=$(curl -s "https://api.github.com/repos/$repo_path/commits?per_page=1" | jq -r 'length')
-              new_git_version="${current_date}.r${commit_count}.${latest_commit}"
+              # For external clones ("clones of other pkgbuild packages") follow best practices.
+              # Own DystopianOS org sources use clean release versions (overridden in detection).
+              cdate=$(echo "$latest_json" | jq -r '.[0].commit.committer.date // .[0].commit.author.date // empty' | cut -d'T' -f1 | tr -d '-')
+              [[ -z "$cdate" || "$cdate" == "null" ]] && cdate=$(date +%Y%m%d)
+              new_git_version="${cdate}.g${latest_commit}"
 
               if [[ "$new_git_version" != "$current_version" ]]; then
                 needs_update=true
@@ -400,6 +412,9 @@ jobs:
         cd "$package_dir"
 
         echo "📝 Updating PKGBUILD for ${{ matrix.name }}..."
+        # For own Dystopian sources new_version will be clean (e.g. 1.5.1).
+        # For external git-rolling it will be the YYYYMMDD.gSHA form.
+        # Always reset pkgrel on real upstream version change.
 
         # Backup original
         cp PKGBUILD PKGBUILD.backup

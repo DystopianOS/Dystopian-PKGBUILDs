@@ -55,9 +55,10 @@ _package-dcx7c5-keyring() {
     chattr -i "${pkgdir}/usr/share/pacman/keyrings/dcx7c5.gpg"
 }
 
-for _p in "${pkgname[@]}"; do
-    eval "package_$_p() {
-    $(declare -f "_package${_p#$pkgbase}")
-    _package${_p#$pkgbase}
-    }"
-done
+package_dystopian-keyring() {
+    _package-dystopian-keyring
+}
+
+package_dcx7c5-keyring() {
+    _package-dcx7c5-keyring
+}

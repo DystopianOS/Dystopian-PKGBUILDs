@@ -1,0 +1,23 @@
+# Maintainer: Dystopian <dcxdevelopment at protonmail dot com>
+# Co-Maintainer: DCx7C5 <dcxdevelopment at protonmail dot com>
+
+pkgname=dystopian-repo
+pkgver=20260530
+pkgrel=1
+pkgdesc="Dystopian repository metapackage"
+arch=('any')
+url="https://github.com/Dystopian-Project/repo"
+license=('GPL-3.0-or-later')
+depends=(
+    dystopian-keyring
+    dystopian-mirrorlist
+    dystopian-settings
+)
+source=(dystopian-repo.README)
+sha512sums=('SKIP')
+
+package() {
+  install -Dm644 dystopian-repo.README "$pkgdir/usr/share/doc/$pkgname/README"
+}
+
+# vim:set sw=2 sts=2 et:

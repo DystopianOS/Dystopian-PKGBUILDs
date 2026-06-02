@@ -1,0 +1,5 @@
+Dystopian repository metapackage
+=================================
+
+This package pulls in the Dystopian keyring, mirrorlist, and system settings
+that provide repository access.
